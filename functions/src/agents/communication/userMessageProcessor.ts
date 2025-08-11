@@ -172,8 +172,18 @@ Guidelines:
             }
         }
 
-        await this.db.collection('processed_messages').add({
+        // Filter out undefined values from context to prevent Firestore errors
+        const cleanContext = message.context ?
+            Object.fromEntries(Object.entries(message.context).filter(([key, value]) => value !== undefined)) :
+            {};
+
+        const cleanMessage = {
             ...message,
+            context: cleanContext
+        };
+
+        await this.db.collection('processed_messages').add({
+            ...cleanMessage,
             analysis,
             classification,
             processedBy: this.agentId,

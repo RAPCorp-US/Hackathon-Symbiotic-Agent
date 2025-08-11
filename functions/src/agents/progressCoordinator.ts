@@ -136,7 +136,7 @@ export class ProgressCoordinator {
     }`;
 
         const response = await this.anthropic.completions.create({
-            model: 'claude-2',
+            model: 'claude-sonnet-4-20250514',
             max_tokens_to_sample: 1500,
             temperature: 0.3,
             prompt: `\n\nHuman: ${prompt}\n\nAssistant:`

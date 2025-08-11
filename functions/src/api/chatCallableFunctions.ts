@@ -526,6 +526,14 @@ export const sendMessage = functions.https.onCall(async (data, context) => {
 
     const { userId, message, projectContext } = data;
 
+    console.log('🔍 BACKEND: projectContext received:', {
+        projectContext,
+        type: typeof projectContext,
+        isUndefined: projectContext === undefined,
+        isNull: projectContext === null,
+        value: projectContext
+    });
+
     if (!userId || !message) {
         throw new functions.https.HttpsError('invalid-argument', 'User ID and message are required');
     }

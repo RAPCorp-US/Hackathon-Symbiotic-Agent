@@ -14,6 +14,7 @@ export interface MessageContext {
     userStatus?: string;
     sessionId?: string;
     hackathonId?: string;
+    projectId?: string;
 }
 export interface MessageAnalysis {
     messageId?: string;
