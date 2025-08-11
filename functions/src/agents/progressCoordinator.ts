@@ -1,6 +1,7 @@
 // functions/src/agents/progressCoordinator.ts
 import Anthropic from '@anthropic-ai/sdk';
 import { Firestore } from '@google-cloud/firestore';
+import { getApiKeys } from '../config/apiKeys';
 import { MessageRouter } from '../core/messageRouter';
 import { Logger } from '../utils/logger';
 
@@ -15,8 +16,9 @@ export class ProgressCoordinator {
         private messageRouter: MessageRouter,
         private logger: Logger
     ) {
+        const apiKeys = getApiKeys();
         this.anthropic = new Anthropic({
-            apiKey: process.env.CLAUDE_API_KEY!,
+            apiKey: apiKeys.claude,
         });
         this.initialize();
     }

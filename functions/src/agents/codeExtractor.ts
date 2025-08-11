@@ -1,6 +1,7 @@
 // functions/src/agents/codeExtractor.ts
 import { Firestore } from '@google-cloud/firestore';
 import { OpenAI } from 'openai';
+import { getApiKeys } from '../config/apiKeys';
 import { MessageRouter } from '../core/messageRouter';
 import { Logger } from '../utils/logger';
 
@@ -12,7 +13,8 @@ export class CodeExtractor {
         private messageRouter: MessageRouter,
         private logger: Logger
     ) {
-        this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const apiKeys = getApiKeys();
+        this.openai = new OpenAI({ apiKey: apiKeys.openai });
         this.initialize();
     }
 

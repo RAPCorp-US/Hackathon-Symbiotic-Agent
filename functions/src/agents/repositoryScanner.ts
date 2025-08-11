@@ -1,6 +1,7 @@
 // functions/src/agents/repositoryScanner.ts
 import { Firestore } from '@google-cloud/firestore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getApiKeys } from '../config/apiKeys';
 import { MessageRouter } from '../core/messageRouter';
 import { CodeAnalyzer } from '../services/codeAnalyzer';
 import { GitService, createGitService } from '../services/gitService';
@@ -22,7 +23,8 @@ export class RepositoryScanner {
         private messageRouter: MessageRouter,
         private logger: Logger
     ) {
-        this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+        const apiKeys = getApiKeys();
+        this.gemini = new GoogleGenerativeAI(apiKeys.gemini);
         this.model = this.gemini.getGenerativeModel({ model: 'gemini-1.5-pro' });
         this.codeAnalyzer = new CodeAnalyzer();
         // GitService will be created when needed with specific repo config

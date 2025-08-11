@@ -13,8 +13,7 @@ export declare class UserMessageProcessor {
     constructor(agentId: 'gpt5mini_1' | 'gpt5mini_2', db: Firestore, messageRouter: MessageRouter, logger: Logger);
     private initialize;
     processUserMessage(message: UserMessage): Promise<ProcessedMessage>;
-    private analyzeMessage;
-    private classifyMessage;
+    private analyzeAndClassifyMessage;
     private reportToDecisionEngine;
     private mapUrgencyToPriority;
     private storeProcessedMessage;
