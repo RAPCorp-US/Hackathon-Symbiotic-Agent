@@ -34,6 +34,37 @@ export const getCommunicationMetrics = functions.https.onCall(async (data, conte
         console.log('🔍 Time threshold:', new Date(timeThreshold).toISOString());
         console.log('🎯 Project filter:', projectId);
 
+        // DEBUGGING: First, let's see ALL messages in the collection
+        console.log('🔍 DEBUG: Fetching ALL messages from processed_messages (no time filter)...');
+        const allMessagesSnapshot = await db.collection('processed_messages').get();
+        console.log(`🔍 DEBUG: Total messages in collection: ${allMessagesSnapshot.size}`);
+
+        if (allMessagesSnapshot.size > 0) {
+            const allMessages = allMessagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+            console.log('🔍 DEBUG: Sample of ALL messages:', allMessages.slice(0, 3).map((msg: any) => ({
+                id: msg.id,
+                timestamp: msg.timestamp,
+                timestampType: typeof msg.timestamp,
+                timestampDate: msg.timestamp ? new Date(msg.timestamp).toISOString() : 'Invalid',
+                userId: msg.userId,
+                hasMessage: !!msg.message,
+                messagePreview: msg.message ? msg.message.substring(0, 50) + '...' : 'No message'
+            })));
+
+            // Check timestamp formats
+            const timestamps = allMessages.map((msg: any) => msg.timestamp).filter((ts: any) => ts);
+            if (timestamps.length > 0) {
+                console.log('🔍 DEBUG: Timestamp analysis:', {
+                    oldestTimestamp: Math.min(...timestamps),
+                    newestTimestamp: Math.max(...timestamps),
+                    oldestDate: new Date(Math.min(...timestamps)).toISOString(),
+                    newestDate: new Date(Math.max(...timestamps)).toISOString(),
+                    currentThreshold: new Date(timeThreshold).toISOString(),
+                    messagesNewerThanThreshold: timestamps.filter((ts: any) => ts >= timeThreshold).length
+                });
+            }
+        }
+
         // Get all messages within timeframe first
         const messagesSnapshot = await db.collection('processed_messages')
             .where('timestamp', '>=', timeThreshold)
