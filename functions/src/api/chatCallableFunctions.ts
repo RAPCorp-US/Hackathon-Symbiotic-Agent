@@ -97,7 +97,15 @@ export const getCommunicationMetrics = functions.https.onCall(async (data, conte
                 if (typeof msg.projectContext === 'string') {
                     return msg.projectContext === projectId;
                 } else if (typeof msg.projectContext === 'object' && msg.projectContext !== null) {
-                    return msg.projectContext.projectId === projectId || msg.projectContext.id === projectId;
+                    // Check if projectContext has projectId or id properties
+                    if (msg.projectContext.projectId === projectId || msg.projectContext.id === projectId) {
+                        return true;
+                    }
+                    // If projectContext is an empty object {}, include the message 
+                    // (these are likely messages from before project association was implemented)
+                    if (Object.keys(msg.projectContext).length === 0) {
+                        return true;
+                    }
                 }
                 return false;
             });
@@ -427,9 +435,29 @@ export const sendMessage = functions.https.onCall(async (data, context) => {
         throw new functions.https.HttpsError('invalid-argument', 'User ID and message are required');
     }
 
+    const db = getFirestore();
+    const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
     try {
-        const db = getFirestore();
-        const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        console.log('🤖 Testing API keys before agent initialization...');
+
+        // Test API key access first
+        const { getApiKeys } = await import('../config/apiKeys');
+        const apiKeys = getApiKeys();
+
+        console.log('🔑 API Keys status:', {
+            hasOpenAI: !!apiKeys.openai,
+            hasGemini: !!apiKeys.gemini,
+            hasClaude: !!apiKeys.claude,
+            openaiLength: apiKeys.openai ? apiKeys.openai.length : 0,
+            geminiLength: apiKeys.gemini ? apiKeys.gemini.length : 0,
+            claudeLength: apiKeys.claude ? apiKeys.claude.length : 0
+        });
+
+        if (!apiKeys.openai || !apiKeys.gemini || !apiKeys.claude) {
+            console.error('❌ Missing API keys, falling back to simple message storage');
+            throw new Error('API keys not properly configured');
+        }
 
         console.log('🤖 Processing message through agent system...');
 
@@ -474,23 +502,32 @@ export const sendMessage = functions.https.onCall(async (data, context) => {
 
         // Fallback: save message without agent processing
         try {
-            const db = getFirestore();
-            const fallbackMessageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            console.log('💾 Saving message to fallback storage...');
 
-            await db.collection('processed_messages').doc(fallbackMessageId).set({
+            await db.collection('processed_messages').doc(messageId).set({
                 userId,
                 message,
                 projectContext: projectContext || {},
                 timestamp: Date.now(),
                 status: 'received',
-                error: 'Agent processing failed, fallback mode'
+                error: 'Agent processing failed, fallback mode',
+                fallbackReason: error instanceof Error ? error.message : 'Unknown error'
             });
+
+            // Generate a simple response based on the message content
+            let simpleResponse = "I apologize, but the coordination system is currently unavailable. Your message has been saved and will be processed when the system is restored.";
+
+            if (message.toLowerCase().includes('start') || message.toLowerCase().includes('begin')) {
+                simpleResponse = "Great! While the full agent system is being restored, I recommend starting with:\n\n1. 📋 Review your project goals\n2. 🎯 Break down tasks into manageable pieces\n3. 👥 Coordinate with your team\n4. 🚀 Begin with the highest priority items\n\nYour message has been saved and the full coordination system will assist you once it's restored.";
+            } else if (message.toLowerCase().includes('help') || message.toLowerCase().includes('?')) {
+                simpleResponse = "I'm here to help! While the main coordination system is being restored, your message has been saved. The system will provide detailed assistance once it's back online. In the meantime, you can continue working on your project tasks.";
+            }
 
             return {
                 success: true,
-                messageId: fallbackMessageId,
+                messageId,
                 message: 'Message received (agent system temporarily unavailable)',
-                response: 'I apologize, but the coordination system is currently unavailable. Your message has been saved and will be processed when the system is restored.',
+                response: simpleResponse,
                 timestamp: Date.now()
             };
         } catch (saveError) {

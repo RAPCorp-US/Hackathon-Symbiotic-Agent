@@ -6,13 +6,31 @@ import * as functions from 'firebase-functions';
  * These are set using: firebase functions:config:set
  */
 export function getApiKeys() {
-    const config = functions.config();
+    console.log('🔑 Getting API keys from Firebase Functions config...');
 
-    return {
-        openai: config.openai?.api_key || process.env.OPENAI_API_KEY,
-        gemini: config.gemini?.api_key || process.env.GEMINI_API_KEY,
-        claude: config.claude?.api_key || process.env.CLAUDE_API_KEY
+    const config = functions.config();
+    console.log('🔑 Firebase config available:', {
+        hasOpenai: !!config.openai,
+        hasGemini: !!config.gemini,
+        hasClaude: !!config.claude
+    });
+
+    const keys = {
+        openai: config.openai?.api_key || '',
+        gemini: config.gemini?.api_key || '',
+        claude: config.claude?.api_key || ''
     };
+
+    console.log('🔑 Retrieved API keys:', {
+        openaiPresent: !!keys.openai,
+        openaiLength: keys.openai ? keys.openai.length : 0,
+        geminiPresent: !!keys.gemini,
+        geminiLength: keys.gemini ? keys.gemini.length : 0,
+        claudePresent: !!keys.claude,
+        claudeLength: keys.claude ? keys.claude.length : 0
+    });
+
+    return keys;
 }
 
 /**
