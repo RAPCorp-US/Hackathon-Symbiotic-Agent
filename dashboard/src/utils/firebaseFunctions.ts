@@ -130,6 +130,11 @@ export const firebaseFunctions = {
         return await callCallableFunction('getAllProjects', {});
     },
 
+    async getCommunicationMetrics(projectId?: string, timeframe?: string) {
+        console.log('🎯 FRONTEND: Calling getCommunicationMetrics with:', { projectId, timeframe });
+        return await callCallableFunction('getCommunicationMetrics', { projectId, timeframe });
+    },
+
     // User functions
     async registerUser(userData: any) {
         console.log('🎯 FRONTEND: Calling registerUser with userData:', userData);

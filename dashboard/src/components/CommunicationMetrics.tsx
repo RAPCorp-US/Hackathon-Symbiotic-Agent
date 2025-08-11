@@ -62,12 +62,12 @@ export const CommunicationMetrics: React.FC<CommunicationMetricsProps> = ({
             });
 
             try {
-                console.log(`📡 [${fetchStartTime}] COMMUNICATIONMETRICS: About to call firebaseFunctions.getUsers`);
+                console.log(`📡 [${fetchStartTime}] COMMUNICATIONMETRICS: About to call firebaseFunctions.getCommunicationMetrics`);
 
                 const startTime = performance.now();
 
-                // Fetch real users from backend using Firebase Functions
-                const result = await firebaseFunctions.getUsers() as any;
+                // Fetch real communication metrics from backend
+                const result = await firebaseFunctions.getCommunicationMetrics(projectId, timeframe) as any;
 
                 const endTime = performance.now();
                 const duration = Math.round(endTime - startTime);
@@ -75,98 +75,38 @@ export const CommunicationMetrics: React.FC<CommunicationMetricsProps> = ({
                 console.log(`📡 [${fetchStartTime}] COMMUNICATIONMETRICS: Firebase function response received`, {
                     success: result?.success,
                     duration: duration + 'ms',
-                    resultKeys: Object.keys(result || {})
+                    resultKeys: Object.keys(result || {}),
+                    metricsKeys: Object.keys(result?.metrics || {}),
+                    teamCommCount: result?.teamComm?.length || 0,
+                    trendsCount: result?.trends?.length || 0
                 });
 
                 if (!result.success) {
-                    console.error(`❌ [${fetchStartTime}] COMMUNICATIONMETRICS: Firebase function failed`, {
+                    console.error(`❌ [${fetchStartTime}] COMMUNICATIONMETRICS: Backend error:`, {
+                        success: result?.success,
                         message: result.message,
                         error: result.error
                     });
-                    throw new Error(result.message || 'Failed to fetch users');
+                    throw new Error(result.message || 'Failed to fetch communication metrics');
                 }
 
-                const realUsers = result.users || [];
+                // Use the real data from the backend
+                const realMetrics = result.metrics;
+                const realTeamComm = result.teamComm || [];
+                const realTrends = result.trends || [];
 
-                console.log(`✅ [${fetchStartTime}] COMMUNICATIONMETRICS: Successfully fetched users`, {
-                    usersCount: realUsers.length,
-                    resultKeys: Object.keys(result),
-                    firstUserSample: realUsers[0] ? {
-                        id: realUsers[0].id,
-                        name: realUsers[0].name,
-                        keys: Object.keys(realUsers[0])
-                    } : null
+                console.log(`📊 [${fetchStartTime}] COMMUNICATIONMETRICS: Setting state with real data`, {
+                    metrics: realMetrics,
+                    teamCommCount: realTeamComm.length,
+                    trendsCount: realTrends.length
                 });
 
-                // For new projects with single users, show zero activity until there's actual communication
-                const isNewProject = realUsers.length <= 1;
+                setMessageStats(realMetrics);
+                setTeamComm(realTeamComm);
+                setTrends(realTrends);
+                setActiveUsers(realTeamComm.filter((m: any) => m.messagesCount > 0).length);
 
-                console.log(`🔍 [${fetchStartTime}] COMMUNICATIONMETRICS: Project analysis`, {
-                    isNewProject,
-                    usersCount: realUsers.length,
-                    willShowZeroActivity: isNewProject
-                });
-
-                const stats: MessageStats = {
-                    totalMessages: 0,
-                    aiResponses: 0,
-                    userQuestions: 0,
-                    codeShares: 0,
-                    urgentMessages: 0,
-                    averageResponseTime: 0
-                };
-
-                // Generate team communication data from real users
-                const teamCommData: TeamCommunication[] = realUsers.map((user: any, index: number) => {
-                    return {
-                        memberId: user.id,
-                        memberName: user.name || `User ${index + 1}`,
-                        messagesCount: 0, // Start with zero until real activity
-                        questionsAsked: 0,
-                        questionsAnswered: 0,
-                        codeSnippetsShared: 0,
-                        lastActiveTime: Date.now(), // Show as recently active
-                        responseTime: 0
-                    };
-                });
-
-                // Show helpful message for new projects
-                if (teamCommData.length === 0 || isNewProject) {
-                    teamCommData.push(
-                        {
-                            memberId: 'getting-started',
-                            memberName: '🚀 Start chatting and collaborating to see metrics here',
-                            messagesCount: 0,
-                            questionsAsked: 0,
-                            questionsAnswered: 0,
-                            codeSnippetsShared: 0,
-                            lastActiveTime: Date.now(),
-                            responseTime: 0
-                        }
-                    );
-                }
-
-                // For new projects, show flat trend data (no artificial activity)
-                const trendsData: CommunicationTrend[] = Array.from({ length: 24 }, (_, i) => ({
-                    hour: i,
-                    messageCount: 0,
-                    urgentCount: 0,
-                    aiResponseCount: 0
-                }));
-
-                console.log(`📊 [${fetchStartTime}] COMMUNICATIONMETRICS: Setting state data`, {
-                    stats,
-                    teamCommCount: teamCommData.length,
-                    trendsCount: trendsData.length,
-                    activeUsers: teamCommData.filter(m => m.memberId !== 'getting-started').length
-                });
-
-                setMessageStats(stats);
-                setTeamComm(teamCommData);
-                setTrends(trendsData);
-                setActiveUsers(teamCommData.filter(m => m.memberId !== 'getting-started').length);
-
-                console.log(`✅ [${fetchStartTime}] COMMUNICATIONMETRICS: fetchRealData completed successfully`);
+                console.log(`✅ [${fetchStartTime}] COMMUNICATIONMETRICS: fetchRealData completed successfully with real metrics`);
 
             } catch (error) {
                 const errorTime = new Date().toISOString();

@@ -2,6 +2,125 @@
 import { getFirestore } from 'firebase-admin/firestore';
 import * as functions from 'firebase-functions';
 
+// Callable function for getting communication metrics
+export const getCommunicationMetrics = functions.https.onCall(async (data, context) => {
+    console.log('getCommunicationMetrics called with data:', data);
+
+    const { projectId, timeframe = '24h' } = data;
+
+    try {
+        const db = getFirestore();
+        const now = Date.now();
+        let timeThreshold = now - (24 * 60 * 60 * 1000); // Default 24h
+
+        // Calculate time threshold based on timeframe
+        switch (timeframe) {
+            case '1h':
+                timeThreshold = now - (60 * 60 * 1000);
+                break;
+            case '6h':
+                timeThreshold = now - (6 * 60 * 60 * 1000);
+                break;
+            case '24h':
+                timeThreshold = now - (24 * 60 * 60 * 1000);
+                break;
+            case '7d':
+                timeThreshold = now - (7 * 24 * 60 * 60 * 1000);
+                break;
+        }
+
+        // Get messages from processed_messages collection
+        let messagesQuery = db.collection('processed_messages')
+            .where('timestamp', '>=', timeThreshold);
+
+        if (projectId) {
+            messagesQuery = messagesQuery.where('projectContext', '==', projectId);
+        }
+
+        const messagesSnapshot = await messagesQuery.get();
+        const messages = messagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+
+        // Calculate metrics
+        const totalMessages = messages.length;
+        const aiResponses = messages.filter((msg: any) => msg.aiResponse).length;
+        const userQuestions = messages.filter((msg: any) =>
+            msg.message && (
+                msg.message.includes('?') ||
+                msg.message.toLowerCase().includes('how') ||
+                msg.message.toLowerCase().includes('what') ||
+                msg.message.toLowerCase().includes('why')
+            )
+        ).length;
+
+        // Group messages by user for team communication data
+        const userMessageCounts = messages.reduce((acc: Record<string, number>, msg: any) => {
+            if (msg.userId) {
+                acc[msg.userId] = (acc[msg.userId] || 0) + 1;
+            }
+            return acc;
+        }, {} as Record<string, number>);
+
+        // Get users for team communication
+        const usersSnapshot = await db.collection('users').get();
+        const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+
+        const teamComm = users.map((user: any) => ({
+            memberId: user.id,
+            memberName: user.name || 'Unknown User',
+            messagesCount: userMessageCounts[user.id] || 0,
+            questionsAsked: messages.filter((msg: any) =>
+                msg.userId === user.id &&
+                msg.message && msg.message.includes('?')
+            ).length,
+            questionsAnswered: messages.filter((msg: any) =>
+                msg.userId === user.id && msg.aiResponse
+            ).length,
+            codeSnippetsShared: 0, // TODO: Implement code detection
+            lastActiveTime: messages
+                .filter((msg: any) => msg.userId === user.id)
+                .sort((a: any, b: any) => b.timestamp - a.timestamp)[0]?.timestamp || 0,
+            responseTime: 0 // TODO: Calculate average response time
+        }));
+
+        // Calculate hourly trends (last 24 hours)
+        const trends = Array.from({ length: 24 }, (_, i) => {
+            const hourStart = now - ((23 - i) * 60 * 60 * 1000);
+            const hourEnd = hourStart + (60 * 60 * 1000);
+
+            const hourMessages = messages.filter((msg: any) =>
+                msg.timestamp >= hourStart && msg.timestamp < hourEnd
+            );
+
+            return {
+                hour: i,
+                messageCount: hourMessages.length,
+                urgentCount: 0, // TODO: Implement urgency detection
+                aiResponseCount: hourMessages.filter((msg: any) => msg.aiResponse).length
+            };
+        });
+
+        return {
+            success: true,
+            metrics: {
+                totalMessages,
+                aiResponses,
+                userQuestions,
+                codeShares: 0, // TODO: Implement
+                urgentMessages: 0, // TODO: Implement
+                averageResponseTime: 0 // TODO: Implement
+            },
+            teamComm,
+            trends,
+            timeframe,
+            timestamp: now
+        };
+
+    } catch (error) {
+        console.error('Error getting communication metrics:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to get communication metrics', error);
+    }
+});
+
 // Callable function for getting project data
 export const getProject = functions.https.onCall(async (data, context) => {
     console.log('getProject called with data:', data);
@@ -142,7 +261,7 @@ export const createProject = functions.https.onCall(async (data, context) => {
     }
 });
 
-// Callable function for sending messages
+// Callable function for sending messages with full agent processing
 export const sendMessage = functions.https.onCall(async (data, context) => {
     console.log('sendMessage called with data:', data);
 
@@ -156,88 +275,74 @@ export const sendMessage = functions.https.onCall(async (data, context) => {
         const db = getFirestore();
         const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-        console.log('🤖 Processing message with AI...');
+        console.log('🤖 Processing message through agent system...');
 
-        // Import AI services
-        const { AIProviders } = await import('../services/aiProviders');
-        const aiProviders = AIProviders.getInstance();
-        const openai = aiProviders.getOpenAI();
+        // Initialize the agent system if not already done
+        const { AgentManager } = await import('../core/agentManager');
+        const agentManager = new AgentManager(db);
+        await agentManager.initialize();
 
-        // Generate AI response
-        const response = await openai.chat.completions.create({
-            model: 'gpt-4o-mini',
-            messages: [
-                {
-                    role: 'system',
-                    content: `You are a helpful AI assistant for a hackathon coordination system. The user is working on their project and may need help with planning, coding, or coordination. Provide helpful, concise responses.
+        // Get the communication hub
+        const communicationHub = agentManager.getAgent('communication_hub');
 
-Project Context: ${JSON.stringify(projectContext || {}, null, 2)}`
-                },
-                {
-                    role: 'user',
-                    content: message
-                }
-            ],
-            max_tokens: 500,
-            temperature: 0.7
-        });
+        if (!communicationHub) {
+            throw new Error('Communication hub not initialized');
+        }
 
-        const aiResponse = response.choices[0]?.message?.content || 'Sorry, I could not generate a response at this time.';
-
-        console.log('✅ AI response generated:', aiResponse.substring(0, 100) + '...');
-
-        // Save both user message and AI response
-        await db.collection('processed_messages').doc(messageId).set({
+        // Process message through the proper agent architecture
+        console.log('📨 Routing message through UserCommunicationHub...');
+        const processedResult = await communicationHub.handleIncomingMessage(
             userId,
             message,
-            projectContext: projectContext || {},
-            timestamp: Date.now(),
-            status: 'processed',
-            aiResponse,
-            responseTimestamp: Date.now()
-        });
+            {
+                projectId: projectContext,
+                messageId: messageId,
+                timestamp: Date.now()
+            }
+        );
 
-        console.log('✅ Message and response saved:', messageId);
+        // The agent system should handle saving and generating responses
+        // Let's check if we got a response from the agents
+        console.log('✅ Message processed through agent system');
 
         return {
             success: true,
             messageId,
-            message: 'Message processed successfully',
-            response: aiResponse,
+            message: 'Message processed by agent system',
+            response: processedResult?.aiResponse || 'Message processed successfully through the multi-agent system.',
             timestamp: Date.now()
         };
-    } catch (error) {
-        console.error('Error processing message:', error);
 
-        // Fallback: still save the message even if AI fails
+    } catch (error) {
+        console.error('Error processing message through agents:', error);
+
+        // Fallback: save message without agent processing
         try {
             const db = getFirestore();
-            const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const fallbackMessageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-            await db.collection('processed_messages').doc(messageId).set({
+            await db.collection('processed_messages').doc(fallbackMessageId).set({
                 userId,
                 message,
                 projectContext: projectContext || {},
                 timestamp: Date.now(),
                 status: 'received',
-                error: 'AI processing failed'
+                error: 'Agent processing failed, fallback mode'
             });
 
             return {
                 success: true,
-                messageId,
-                message: 'Message received (AI processing temporarily unavailable)',
-                response: 'I apologize, but I am temporarily unable to process your message. Your message has been saved and will be reviewed.',
+                messageId: fallbackMessageId,
+                message: 'Message received (agent system temporarily unavailable)',
+                response: 'I apologize, but the coordination system is currently unavailable. Your message has been saved and will be processed when the system is restored.',
                 timestamp: Date.now()
             };
         } catch (saveError) {
-            console.error('Failed to save message after AI error:', saveError);
+            console.error('Failed to save message after agent error:', saveError);
             throw new functions.https.HttpsError('internal', 'Failed to process message', error);
         }
     }
-});
-
-// Callable function for getting roadmap data
+});// Callable function for getting roadmap data
 export const getRoadmap = functions.https.onCall(async (data, context) => {
     console.log('🚀 getRoadmap called with data:', JSON.stringify(data, null, 2));
 
