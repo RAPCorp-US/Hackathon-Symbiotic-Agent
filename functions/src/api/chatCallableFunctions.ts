@@ -30,27 +30,108 @@ export const getCommunicationMetrics = functions.https.onCall(async (data, conte
         }
 
         // Get messages from processed_messages collection
-        let messagesQuery = db.collection('processed_messages')
-            .where('timestamp', '>=', timeThreshold);
+        console.log('📊 Fetching messages from processed_messages collection...');
+        console.log('🔍 Time threshold:', new Date(timeThreshold).toISOString());
+        console.log('🎯 Project filter:', projectId);
 
-        if (projectId) {
-            messagesQuery = messagesQuery.where('projectContext', '==', projectId);
+        // Get all messages within timeframe first
+        const messagesSnapshot = await db.collection('processed_messages')
+            .where('timestamp', '>=', timeThreshold)
+            .get();
+
+        console.log(`📨 Found ${messagesSnapshot.size} messages in timeframe`);
+
+        // Filter messages by project if projectId is provided
+        let messages = messagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+
+        // Log some sample messages to understand the structure
+        if (messages.length > 0) {
+            console.log('📋 Sample message structure:', {
+                id: messages[0].id,
+                keys: Object.keys(messages[0]),
+                projectContext: messages[0].projectContext,
+                projectContextType: typeof messages[0].projectContext,
+                userId: messages[0].userId,
+                timestamp: messages[0].timestamp,
+                hasMessage: !!messages[0].message,
+                hasAiResponse: !!messages[0].aiResponse
+            });
         }
 
-        const messagesSnapshot = await messagesQuery.get();
-        const messages = messagesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
+        if (projectId) {
+            // Filter messages that match the project
+            const beforeFilter = messages.length;
+            messages = messages.filter((msg: any) => {
+                // Handle different projectContext formats
+                if (typeof msg.projectContext === 'string') {
+                    return msg.projectContext === projectId;
+                } else if (typeof msg.projectContext === 'object' && msg.projectContext !== null) {
+                    return msg.projectContext.projectId === projectId || msg.projectContext.id === projectId;
+                }
+                return false;
+            });
+            console.log(`🔍 Filtered from ${beforeFilter} to ${messages.length} messages for project ${projectId}`);
+        }
 
         // Calculate metrics
+        console.log(`📊 Calculating metrics from ${messages.length} messages...`);
+
         const totalMessages = messages.length;
-        const aiResponses = messages.filter((msg: any) => msg.aiResponse).length;
+        const aiResponses = messages.filter((msg: any) => msg.aiResponse || msg.response).length;
         const userQuestions = messages.filter((msg: any) =>
             msg.message && (
                 msg.message.includes('?') ||
                 msg.message.toLowerCase().includes('how') ||
                 msg.message.toLowerCase().includes('what') ||
-                msg.message.toLowerCase().includes('why')
+                msg.message.toLowerCase().includes('why') ||
+                msg.message.toLowerCase().includes('when') ||
+                msg.message.toLowerCase().includes('where')
             )
         ).length;
+
+        const codeShares = messages.filter((msg: any) =>
+            msg.message && (
+                msg.message.includes('```') ||
+                msg.message.includes('function') ||
+                msg.message.includes('const ') ||
+                msg.message.includes('let ') ||
+                msg.message.includes('var ') ||
+                msg.message.includes('import ') ||
+                msg.message.includes('export ')
+            )
+        ).length;
+
+        const urgentMessages = messages.filter((msg: any) =>
+            msg.message && (
+                msg.message.toLowerCase().includes('urgent') ||
+                msg.message.toLowerCase().includes('emergency') ||
+                msg.message.toLowerCase().includes('asap') ||
+                msg.message.toLowerCase().includes('help!') ||
+                msg.message.includes('!!!')
+            )
+        ).length;
+
+        // Calculate average response time (simplified)
+        let totalResponseTime = 0;
+        let responseCount = 0;
+        messages.forEach((msg: any) => {
+            if (msg.responseTime) {
+                totalResponseTime += msg.responseTime;
+                responseCount++;
+            }
+        });
+        const averageResponseTime = responseCount > 0 ? Math.round(totalResponseTime / responseCount) : 0;
+
+        const metrics = {
+            totalMessages,
+            aiResponses,
+            userQuestions,
+            codeShares,
+            urgentMessages,
+            averageResponseTime
+        };
+
+        console.log('📊 Calculated metrics:', metrics);
 
         // Group messages by user for team communication data
         const userMessageCounts = messages.reduce((acc: Record<string, number>, msg: any) => {
@@ -61,28 +142,59 @@ export const getCommunicationMetrics = functions.https.onCall(async (data, conte
         }, {} as Record<string, number>);
 
         // Get users for team communication
+        console.log('👥 Fetching users and calculating team communication data...');
         const usersSnapshot = await db.collection('users').get();
         const users = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
 
-        const teamComm = users.map((user: any) => ({
-            memberId: user.id,
-            memberName: user.name || 'Unknown User',
-            messagesCount: userMessageCounts[user.id] || 0,
-            questionsAsked: messages.filter((msg: any) =>
-                msg.userId === user.id &&
+        console.log(`Found ${users.length} users in database`);
+
+        const teamComm = users.map((user: any) => {
+            const userMessages = messages.filter((msg: any) => msg.userId === user.id);
+            const userQuestions = userMessages.filter((msg: any) =>
                 msg.message && msg.message.includes('?')
-            ).length,
-            questionsAnswered: messages.filter((msg: any) =>
-                msg.userId === user.id && msg.aiResponse
-            ).length,
-            codeSnippetsShared: 0, // TODO: Implement code detection
-            lastActiveTime: messages
-                .filter((msg: any) => msg.userId === user.id)
-                .sort((a: any, b: any) => b.timestamp - a.timestamp)[0]?.timestamp || 0,
-            responseTime: 0 // TODO: Calculate average response time
-        }));
+            );
+            const userResponses = userMessages.filter((msg: any) =>
+                msg.aiResponse || msg.response
+            );
+            const userCodeShares = userMessages.filter((msg: any) =>
+                msg.message && (
+                    msg.message.includes('```') ||
+                    msg.message.includes('function') ||
+                    msg.message.includes('const ') ||
+                    msg.message.includes('import ')
+                )
+            );
+
+            return {
+                memberId: user.id,
+                memberName: user.name || user.email || `User ${user.id.slice(-4)}`,
+                messagesCount: userMessageCounts[user.id] || 0,
+                questionsAsked: userQuestions.length,
+                questionsAnswered: userResponses.length,
+                codeSnippetsShared: userCodeShares.length,
+                lastActiveTime: userMessages.length > 0
+                    ? Math.max(...userMessages.map((msg: any) => msg.timestamp))
+                    : 0,
+                responseTime: 0 // TODO: Calculate average response time
+            };
+        });
+
+        // Add a summary entry if no users have activity
+        if (teamComm.every(tc => tc.messagesCount === 0)) {
+            teamComm.push({
+                memberId: 'summary',
+                memberName: `📊 ${totalMessages} messages found in database`,
+                messagesCount: totalMessages,
+                questionsAsked: userQuestions,
+                questionsAnswered: aiResponses,
+                codeSnippetsShared: codeShares,
+                lastActiveTime: messages.length > 0 ? Math.max(...messages.map((msg: any) => msg.timestamp)) : Date.now(),
+                responseTime: averageResponseTime
+            });
+        }
 
         // Calculate hourly trends (last 24 hours)
+        console.log('📈 Calculating hourly trends...');
         const trends = Array.from({ length: 24 }, (_, i) => {
             const hourStart = now - ((23 - i) * 60 * 60 * 1000);
             const hourEnd = hourStart + (60 * 60 * 1000);
@@ -91,29 +203,42 @@ export const getCommunicationMetrics = functions.https.onCall(async (data, conte
                 msg.timestamp >= hourStart && msg.timestamp < hourEnd
             );
 
+            const urgentInHour = hourMessages.filter((msg: any) =>
+                msg.message && (
+                    msg.message.toLowerCase().includes('urgent') ||
+                    msg.message.toLowerCase().includes('emergency') ||
+                    msg.message.toLowerCase().includes('asap') ||
+                    msg.message.includes('!!!')
+                )
+            );
+
             return {
                 hour: i,
                 messageCount: hourMessages.length,
-                urgentCount: 0, // TODO: Implement urgency detection
-                aiResponseCount: hourMessages.filter((msg: any) => msg.aiResponse).length
+                urgentCount: urgentInHour.length,
+                aiResponseCount: hourMessages.filter((msg: any) => msg.aiResponse || msg.response).length
             };
         });
 
-        return {
+        console.log('👥 Team communication data:', teamComm.map(t => `${t.memberName}: ${t.messagesCount} messages`));
+        console.log('📈 Trends calculated for 24 hours');
+
+        const result = {
             success: true,
-            metrics: {
-                totalMessages,
-                aiResponses,
-                userQuestions,
-                codeShares: 0, // TODO: Implement
-                urgentMessages: 0, // TODO: Implement
-                averageResponseTime: 0 // TODO: Implement
-            },
+            metrics,
             teamComm,
             trends,
             timeframe,
             timestamp: now
         };
+
+        console.log('✅ getCommunicationMetrics completed successfully:', {
+            totalMessages: metrics.totalMessages,
+            teamMembersWithActivity: teamComm.filter(t => t.messagesCount > 0).length,
+            trendsHours: trends.length
+        });
+
+        return result;
 
     } catch (error) {
         console.error('Error getting communication metrics:', error);

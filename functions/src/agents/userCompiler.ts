@@ -1,6 +1,7 @@
 // functions/src/agents/userCompiler.ts
-import { Firestore, Timestamp } from '@google-cloud/firestore';
+import { Firestore } from '@google-cloud/firestore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getApiKeys } from '../config/apiKeys';
 import { MessageRouter } from '../core/messageRouter';
 import { Logger } from '../utils/logger';
 
@@ -16,7 +17,8 @@ export class UserCompiler {
         private messageRouter: MessageRouter,
         private logger: Logger
     ) {
-        this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+        const apiKeys = getApiKeys();
+        this.gemini = new GoogleGenerativeAI(apiKeys.gemini!);
         this.model = this.gemini.getGenerativeModel({ model: 'gemini-2.5-flash' });
         this.initialize();
     }

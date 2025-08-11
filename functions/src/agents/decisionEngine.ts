@@ -1,6 +1,7 @@
 // functions/src/agents/decisionEngine.ts
 import { Firestore, Timestamp } from '@google-cloud/firestore';
 import { OpenAI } from 'openai';
+import { getApiKeys } from '../config/apiKeys';
 import { MessageRouter } from '../core/messageRouter';
 import { AgentMessage } from '../models/types';
 import { Logger } from '../utils/logger';
@@ -31,7 +32,8 @@ export class DecisionEngine {
         private messageRouter: MessageRouter,
         private logger: Logger
     ) {
-        this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const apiKeys = getApiKeys();
+        this.openai = new OpenAI({ apiKey: apiKeys.openai });
         this.initialize();
     }
 

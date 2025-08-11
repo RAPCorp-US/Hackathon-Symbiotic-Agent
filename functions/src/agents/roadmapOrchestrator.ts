@@ -1,6 +1,7 @@
 // functions/src/agents/roadmapOrchestrator.ts
 import { FieldValue, Firestore } from '@google-cloud/firestore';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { getApiKeys } from '../config/apiKeys';
 import { MessageRouter } from '../core/messageRouter';
 import { Roadmap, StrategicSummary, Task, User } from '../models/types';
 import { Logger } from '../utils/logger';
@@ -16,7 +17,8 @@ export class RoadmapOrchestrator {
         private messageRouter: MessageRouter,
         private logger: Logger
     ) {
-        this.gemini = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+        const apiKeys = getApiKeys();
+        this.gemini = new GoogleGenerativeAI(apiKeys.gemini!);
         this.model = this.gemini.getGenerativeModel({ model: 'gemini-2.5-pro' });
         this.initialize();
     }

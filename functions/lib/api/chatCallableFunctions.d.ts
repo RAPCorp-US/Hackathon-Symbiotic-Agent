@@ -1,4 +1,5 @@
 import * as functions from 'firebase-functions';
+export declare const getCommunicationMetrics: functions.HttpsFunction & functions.Runnable<any>;
 export declare const getProject: functions.HttpsFunction & functions.Runnable<any>;
 export declare const getChatHistory: functions.HttpsFunction & functions.Runnable<any>;
 export declare const createProject: functions.HttpsFunction & functions.Runnable<any>;
