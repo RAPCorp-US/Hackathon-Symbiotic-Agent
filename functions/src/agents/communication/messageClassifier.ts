@@ -1,5 +1,6 @@
 // functions/src/agents/communication/messageClassifier.ts
 import { OpenAI } from 'openai';
+import { getApiKeys } from '../../config/apiKeys';
 import { MessageClassification } from '../../models/communication.types';
 
 export class MessageClassifier {
@@ -7,7 +8,8 @@ export class MessageClassifier {
     private classificationCache: Map<string, MessageClassification> = new Map();
 
     constructor() {
-        this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const apiKeys = getApiKeys();
+        this.openai = new OpenAI({ apiKey: apiKeys.openai });
     }
 
     async classifyMessage(content: string, context: any): Promise<MessageClassification> {

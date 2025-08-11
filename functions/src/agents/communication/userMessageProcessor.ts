@@ -1,6 +1,7 @@
 // functions/src/agents/communication/userMessageProcessor.ts
 import { Firestore, Timestamp } from '@google-cloud/firestore';
 import { OpenAI } from 'openai';
+import { getApiKeys } from '../../config/apiKeys';
 import { MessageRouter } from '../../core/messageRouter';
 import {
     MessageAnalysis,
@@ -9,6 +10,7 @@ import {
     UserMessage
 } from '../../models/communication.types';
 import { Logger } from '../../utils/logger';
+
 
 export class UserMessageProcessor {
     private openai: OpenAI;
@@ -23,7 +25,8 @@ export class UserMessageProcessor {
         private logger: Logger
     ) {
         this.agentId = agentId;
-        this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const apiKeys = getApiKeys();
+        this.openai = new OpenAI({ apiKey: apiKeys.openai });
         this.initialize();
     }
 
@@ -35,11 +38,8 @@ export class UserMessageProcessor {
         try {
             this.isProcessing = true;
 
-            // Parallel analysis for efficiency
-            const [analysis, classification] = await Promise.all([
-                this.analyzeMessage(message),
-                this.classifyMessage(message)
-            ]);
+            // Single comprehensive analysis and classification
+            const { analysis, classification } = await this.analyzeAndClassifyMessage(message);
 
             // Report to O4-Mini
             await this.reportToDecisionEngine(analysis, classification);
@@ -61,72 +61,68 @@ export class UserMessageProcessor {
         }
     }
 
-    private async analyzeMessage(message: UserMessage): Promise<MessageAnalysis> {
+    private async analyzeAndClassifyMessage(message: UserMessage): Promise<{
+        analysis: MessageAnalysis;
+        classification: MessageClassification;
+    }> {
         const prompt = `
-    Analyze this hackathon participant message:
-    User: ${message.userName}
-    Message: ${message.content}
-    Context: ${JSON.stringify(message.context)}
-    Current Tasks: ${JSON.stringify(message.context?.currentTasks || [])}
-    
-    Extract and return as JSON:
-    {
-      "intent": "question|request|feedback|issue|help|status_update|collaboration",
-      "entities": {
-        "tasks": ["list of mentioned task names"],
-        "users": ["mentioned user names"],
-        "technical_terms": ["technical concepts mentioned"],
-        "files": ["mentioned file paths"]
-      },
-      "emotional_tone": "frustrated|neutral|positive|urgent|confused",
-      "requires_action": true/false,
-      "action_type": "immediate|scheduled|informational|none",
-      "expertise_needed": ["areas of expertise required"]
-    }`;
+Analyze and classify this user message comprehensively:
+
+MESSAGE: "${message.content}"
+USER STATUS: ${message.context?.userStatus || 'active'}
+HACKATHON CONTEXT: ${message.context?.hackathonId || 'unknown'}
+
+Return a JSON response with BOTH analysis and classification:
+
+{
+  "analysis": {
+    "intent": "question|request|feedback|issue|help|status_update|collaboration",
+    "entities": {
+      "tasks": ["extracted task mentions"],
+      "users": ["mentioned users/roles"],
+      "technical_terms": ["technical concepts, frameworks, tools"],
+      "files": ["mentioned files, paths, repositories"]
+    },
+    "emotional_tone": "positive|neutral|negative|frustrated|urgent",
+    "requires_action": true/false,
+    "action_type": "immediate|scheduled|none",
+    "expertise_needed": ["required expertise areas"],
+    "messageId": "${message.id}"
+  },
+  "classification": {
+    "urgency": "critical|high|medium|low",
+    "category": "technical|coordination|planning|help",
+    "route_to": ["roadmap_orchestrator", "progress_coordinator", "code_extractor"],
+    "action": "notify_team|update_roadmap|assign_help|provide_info|escalate",
+    "confidence": 0.0-1.0
+  }
+}
+
+Guidelines:
+- Extract ALL relevant entities comprehensively
+- Map intent accurately to user's actual need
+- Set urgency based on blocking potential and time sensitivity
+- Route to appropriate agents based on content type
+- Provide actionable classification for coordination`;
 
         const response = await this.openai.chat.completions.create({
-            model: 'gpt-5-mini',
+            model: 'gpt-4o-mini',
             messages: [{ role: 'user', content: prompt }],
-            temperature: 0.3,
+            temperature: 0.2,
             max_tokens: 500,
             response_format: { type: 'json_object' }
         });
 
         const content = response.choices[0]?.message?.content;
         if (!content) {
-            throw new Error('No response content received from OpenAI');
+            throw new Error('No response content received from OpenAI for message analysis');
         }
-        return JSON.parse(content);
-    }
 
-    private async classifyMessage(message: UserMessage): Promise<MessageClassification> {
-        const prompt = `
-    Classify urgency and routing for this message:
-    Content: ${message.content}
-    User Status: ${message.context?.userStatus || 'active'}
-    
-    Return JSON:
-    {
-      "urgency": "critical|high|medium|low",
-      "category": "technical|coordination|planning|help",
-      "route_to": ["roadmap_orchestrator", "progress_coordinator", "code_extractor"],
-      "action": "notify_team|update_roadmap|assign_help|provide_info|escalate",
-      "confidence": 0.0-1.0
-    }`;
-
-        const response = await this.openai.chat.completions.create({
-            model: 'gpt-5-mini',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.2,
-            max_tokens: 200,
-            response_format: { type: 'json_object' }
-        });
-
-        const content = response.choices[0]?.message?.content;
-        if (!content) {
-            throw new Error('No response content received from OpenAI for classification');
-        }
-        return JSON.parse(content);
+        const result = JSON.parse(content);
+        return {
+            analysis: result.analysis,
+            classification: result.classification
+        };
     }
 
     private async reportToDecisionEngine(

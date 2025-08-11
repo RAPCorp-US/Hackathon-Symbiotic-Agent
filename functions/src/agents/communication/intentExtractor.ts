@@ -1,5 +1,6 @@
 // functions/src/agents/communication/intentExtractor.ts
 import { OpenAI } from 'openai';
+import { getApiKeys } from '../../config/apiKeys';
 
 export interface ExtractedIntent {
     primary: string;
@@ -19,7 +20,8 @@ export class IntentExtractor {
     private openai: OpenAI;
 
     constructor() {
-        this.openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+        const apiKeys = getApiKeys();
+        this.openai = new OpenAI({ apiKey: apiKeys.openai });
     }
 
     async extractIntent(message: string, context: any): Promise<ExtractedIntent> {
