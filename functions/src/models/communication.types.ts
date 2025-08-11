@@ -16,6 +16,7 @@ export interface MessageContext {
     userStatus?: string;
     sessionId?: string;
     hackathonId?: string;
+    projectId?: string;  // Add projectId field
 }
 
 export interface MessageAnalysis {

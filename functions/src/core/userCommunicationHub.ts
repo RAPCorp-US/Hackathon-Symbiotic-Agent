@@ -90,7 +90,9 @@ export class UserCommunicationHub {
             userName: await this.getUserName(userId),
             content: message,
             context: {
+                // Preserve incoming context fields first
                 ...context,
+                // Then add/override with dynamic fields
                 currentTasks: await this.getUserCurrentTasks(userId),
                 userStatus: await this.getUserStatus(userId)
             },

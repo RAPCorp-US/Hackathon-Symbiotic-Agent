@@ -159,6 +159,19 @@ Guidelines:
         analysis: MessageAnalysis,
         classification: MessageClassification
     ) {
+        // Debug logging to identify undefined values
+        this.logger.info(`[UserMessageProcessor] Storing message: ${message.id}`);
+        this.logger.info(`[UserMessageProcessor] Message context:`, JSON.stringify(message.context, null, 2));
+
+        // Check for undefined values before storing
+        if (message.context) {
+            const undefinedFields = Object.entries(message.context).filter(([key, value]) => value === undefined);
+            if (undefinedFields.length > 0) {
+                this.logger.warn(`[UserMessageProcessor] WARNING: Found undefined fields in message ${message.id}:`, undefinedFields);
+                this.logger.warn(`[UserMessageProcessor] Full message context:`, message.context);
+            }
+        }
+
         await this.db.collection('processed_messages').add({
             ...message,
             analysis,

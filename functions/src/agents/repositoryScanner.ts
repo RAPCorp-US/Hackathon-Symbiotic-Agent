@@ -251,14 +251,24 @@ export class RepositoryScanner {
     }
 
     private async performIncrementalScan() {
-        const changes = await this.gitService.getChangesSince(this.lastScanTime);
+        // Ensure gitService is available before scanning
+        if (!this.gitService) {
+            this.logger.warn(`Scanner ${this.id}: GitService not initialized, skipping incremental scan`);
+            return;
+        }
 
-        if (changes.length > 0) {
-            await this.performScan({
-                depth: 'shallow',
-                focus: 'incremental',
-                includeMetrics: true
-            });
+        try {
+            const changes = await this.gitService.getChangesSince(this.lastScanTime);
+
+            if (changes.length > 0) {
+                await this.performScan({
+                    depth: 'shallow',
+                    focus: 'incremental',
+                    includeMetrics: true
+                });
+            }
+        } catch (error) {
+            this.logger.error(`Scanner ${this.id}: Error during incremental scan: ${error}`);
         }
     }
 
