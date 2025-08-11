@@ -46,7 +46,6 @@ export const ProgressMap: React.FC<ProgressMapProps> = ({ projectId, userId }) =
     const [isLoading, setIsLoading] = useState(true);
     // const [socket, setSocket] = useState<Socket | null>(null); // Disabled for Firebase Functions
     const [error, setError] = useState<string | null>(null);
-    const [nextRefreshIn, setNextRefreshIn] = useState<number>(0); // seconds until next refresh
 
     // Connect to your real backend system
     useEffect(() => {
@@ -101,143 +100,48 @@ export const ProgressMap: React.FC<ProgressMapProps> = ({ projectId, userId }) =
             }
         };
 
-        // Smart refresh strategy - reduce API calls
-        const setupSmartRefresh = () => {
+        // Event-driven refresh strategy - only refresh when meaningful events occur
+        const setupEventDrivenRefresh = () => {
             const setupTime = new Date().toISOString();
-            console.log(`🔄 [${setupTime}] PROGRESSMAP: Setting up smart roadmap refresh`, {
+            console.log(`🎯 [${setupTime}] PROGRESSMAP: Setting up event-driven roadmap refresh`, {
                 projectId,
                 userId,
-                initialInterval: '2 minutes'
+                strategy: 'Event-driven only (no auto-refresh)'
             });
 
-            // Use exponential backoff for new projects with no activity
-            // Start with 2 minutes, increase to 5 minutes if no changes detected
-            let refreshInterval = 2 * 60 * 1000; // 2 minutes initially
-            let lastDataHash = '';
-            let consecutiveNoChanges = 0;
-            let countdownInterval: NodeJS.Timeout;
-
-            const updateCountdown = (totalSeconds: number) => {
-                let remaining = Math.ceil(totalSeconds / 1000);
-                setNextRefreshIn(remaining);
-
-                console.log(`⏱️ PROGRESSMAP: Starting countdown from ${remaining} seconds`);
-
-                countdownInterval = setInterval(() => {
-                    remaining--;
-                    setNextRefreshIn(remaining);
-                    if (remaining <= 0) {
-                        clearInterval(countdownInterval);
-                        console.log(`⏰ PROGRESSMAP: Countdown completed`);
-                    }
-                }, 1000);
-            };
-
-            const scheduleNextRefresh = () => {
-                const scheduleTime = new Date().toISOString();
-                console.log(`📅 [${scheduleTime}] PROGRESSMAP: Scheduling next refresh`, {
-                    intervalMs: refreshInterval,
-                    intervalMinutes: Math.round(refreshInterval / 60000),
-                    consecutiveNoChanges
+            // Manual refresh function that can be called when needed
+            const manualRefresh = async (reason: string) => {
+                const refreshTime = new Date().toISOString();
+                console.log(`🔄 [${refreshTime}] PROGRESSMAP: Manual refresh triggered`, {
+                    reason,
+                    projectId
                 });
 
-                updateCountdown(refreshInterval);
-
-                setTimeout(async () => {
-                    const refreshTime = new Date().toISOString();
-                    console.log(`🔄 [${refreshTime}] PROGRESSMAP: Executing smart refresh`);
-
-                    try {
-                        // Only refresh if user is on the progress tab
-                        if (document.visibilityState === 'hidden') {
-                            console.log(`👁️ [${refreshTime}] PROGRESSMAP: Page hidden, skipping refresh`);
-                            scheduleNextRefresh();
-                            return;
-                        }
-
-                        console.log(`📡 [${refreshTime}] PROGRESSMAP: Making smart refresh API call`);
-                        const data = await firebaseFunctions.getRoadmap(projectId);
-
-                        const currentDataHash = JSON.stringify(data.phases?.map((p: any) => ({
-                            id: p.id,
-                            status: p.status,
-                            progress: p.progress
-                        })));
-
-                        console.log(`🔍 [${refreshTime}] PROGRESSMAP: Data comparison`, {
-                            currentHashLength: currentDataHash.length,
-                            lastHashLength: lastDataHash.length,
-                            hashesMatch: currentDataHash === lastDataHash,
-                            consecutiveNoChanges
-                        });
-
-                        // Check if data actually changed
-                        if (currentDataHash === lastDataHash) {
-                            consecutiveNoChanges++;
-                            console.log(`📊 [${refreshTime}] PROGRESSMAP: No data changes detected`, {
-                                consecutiveNoChanges,
-                                willIncreaseInterval: consecutiveNoChanges >= 3
-                            });
-
-                            // Increase interval if no changes (max 5 minutes)
-                            if (consecutiveNoChanges >= 3) {
-                                const oldInterval = refreshInterval;
-                                refreshInterval = Math.min(5 * 60 * 1000, refreshInterval * 1.5);
-                                console.log(`⏰ [${refreshTime}] PROGRESSMAP: Increasing refresh interval`, {
-                                    oldIntervalMinutes: Math.round(oldInterval / 60000),
-                                    newIntervalMinutes: Math.round(refreshInterval / 60000)
-                                });
-                            }
-                        } else {
-                            // Data changed, reset to faster refresh
-                            console.log(`🎉 [${refreshTime}] PROGRESSMAP: Data changes detected!`, {
-                                oldConsecutiveNoChanges: consecutiveNoChanges,
-                                oldIntervalMinutes: Math.round(refreshInterval / 60000)
-                            });
-
-                            consecutiveNoChanges = 0;
-                            refreshInterval = 2 * 60 * 1000;
-                            lastDataHash = currentDataHash;
-                            setRoadmapData(data);
-
-                            console.log(`✅ [${refreshTime}] PROGRESSMAP: Updated roadmap data with changes`);
-                        }
-
-                        console.log(`📝 [${refreshTime}] PROGRESSMAP: Next refresh scheduled`, {
-                            intervalSeconds: refreshInterval / 1000,
-                            intervalMinutes: Math.round(refreshInterval / 60000)
-                        });
-
-                        scheduleNextRefresh();
-                    } catch (error) {
-                        const errorTime = new Date().toISOString();
-                        console.error(`💥 [${errorTime}] PROGRESSMAP: Smart refresh error:`, {
-                            error: error instanceof Error ? error.message : String(error),
-                            errorStack: error instanceof Error ? error.stack : 'No stack',
-                            willRetryWithLongerInterval: true
-                        });
-
-                        // On error, retry with longer interval
-                        refreshInterval = 5 * 60 * 1000;
-                        scheduleNextRefresh();
-                    }
-                }, refreshInterval);
+                try {
+                    console.log(`📡 [${refreshTime}] PROGRESSMAP: Making event-driven API call`);
+                    const data = await firebaseFunctions.getRoadmap(projectId);
+                    setRoadmapData(data);
+                    console.log(`✅ [${refreshTime}] PROGRESSMAP: Roadmap updated successfully`);
+                } catch (error) {
+                    console.error(`� [${refreshTime}] PROGRESSMAP: Manual refresh error:`, {
+                        error: error instanceof Error ? error.message : String(error),
+                        reason
+                    });
+                }
             };
 
-            // Start the smart refresh cycle
-            console.log(`🚀 [${setupTime}] PROGRESSMAP: Starting smart refresh cycle`);
-            scheduleNextRefresh();
+            // Add refresh button functionality
+            const refreshButton = document.createElement('button');
+            refreshButton.innerHTML = '🔄 Refresh Roadmap';
+            refreshButton.className = 'hidden'; // Hidden for now, can be exposed in UI later
+            
+            console.log(`✅ [${setupTime}] PROGRESSMAP: Event-driven refresh setup completed - no auto-refresh`);
 
-            // Return cleanup function
+            // Return minimal cleanup function
             return () => {
                 const cleanupTime = new Date().toISOString();
-                console.log(`🧹 [${cleanupTime}] PROGRESSMAP: Smart refresh cleanup started`);
-
-                if (countdownInterval) {
-                    clearInterval(countdownInterval);
-                    console.log(`🧹 [${cleanupTime}] PROGRESSMAP: Cleared countdown interval`);
-                }
-                console.log(`🧹 [${cleanupTime}] PROGRESSMAP: Smart refresh cleanup completed`);
+                console.log(`🧹 [${cleanupTime}] PROGRESSMAP: Event-driven refresh cleanup (minimal)`);
+                // No intervals to clean up since we removed auto-refresh
             };
         };
 
@@ -245,11 +149,12 @@ export const ProgressMap: React.FC<ProgressMapProps> = ({ projectId, userId }) =
         console.log(`🏗️ [${componentStartTime}] PROGRESSMAP: Component useEffect starting`, {
             projectId,
             userId,
-            component: 'ProgressMap'
+            component: 'ProgressMap',
+            refreshStrategy: 'Event-driven only'
         });
 
         fetchRoadmapData();
-        const cleanupRefresh = setupSmartRefresh();
+        const cleanupRefresh = setupEventDrivenRefresh();
 
         // Cleanup
         return () => {
@@ -391,12 +296,10 @@ export const ProgressMap: React.FC<ProgressMapProps> = ({ projectId, userId }) =
                     <h2 className="text-xl font-semibold text-gray-900">AI-Powered Roadmap</h2>
                     <div className="flex items-center space-x-4 text-sm text-gray-600">
                         <span>Last updated: {new Date(roadmapData.lastUpdated).toLocaleTimeString()}</span>
-                        {nextRefreshIn > 0 && (
-                            <span className="flex items-center space-x-1 text-xs">
-                                <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse"></div>
-                                <span>Next refresh: {Math.floor(nextRefreshIn / 60)}:{(nextRefreshIn % 60).toString().padStart(2, '0')}</span>
-                            </span>
-                        )}
+                        <span className="flex items-center space-x-1 text-xs text-green-600">
+                            <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                            <span>Event-driven refresh (no auto-refresh)</span>
+                        </span>
                     </div>
                 </div>
 

@@ -7,7 +7,6 @@ import { GitHubIntegration } from './components/GitHubIntegration';
 import { ProgressMap } from './components/ProgressMap';
 import { ProjectSelection } from './components/ProjectSelection';
 import { ProjectSetup } from './components/ProjectSetup';
-import { ScannerControl } from './components/ScannerControl';
 import { firebaseFunctions } from './utils/firebaseFunctions';
 
 interface User {
@@ -41,7 +40,7 @@ interface GitHubRepo {
 }
 
 function App() {
-    const [activeTab, setActiveTab] = useState<'chat' | 'progress' | 'metrics' | 'scanner'>('chat');
+    const [activeTab, setActiveTab] = useState<'chat' | 'progress' | 'metrics'>('chat');
     const [user, setUser] = useState<User | null>(null);
     const [project, setProject] = useState<ProjectData | null>(null);
     const [githubRepo, setGithubRepo] = useState<GitHubRepo | null>(null);
@@ -283,8 +282,7 @@ function App() {
                         {[
                             { id: 'chat', label: '💬 AI Chat', desc: 'Real-time team communication' },
                             { id: 'progress', label: '📊 Progress', desc: 'Project timeline & milestones' },
-                            { id: 'metrics', label: '📈 Metrics', desc: 'Team collaboration analytics' },
-                            { id: 'scanner', label: '🔍 Scanner', desc: 'AI repository scanner control' }
+                            { id: 'metrics', label: '📈 Metrics', desc: 'Team collaboration analytics' }
                         ].map((tab) => (
                             <button
                                 key={tab.id}
@@ -326,13 +324,6 @@ function App() {
                         <CommunicationMetrics
                             projectId={projectId}
                             timeframe="6h"
-                        />
-                    )}
-
-                    {activeTab === 'scanner' && (
-                        <ScannerControl
-                            projectId={projectId}
-                            userId={user.id}
                         />
                     )}
                 </div>

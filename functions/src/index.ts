@@ -11,6 +11,7 @@ import { users } from './api/userEndpoints';
 import { webhooks } from './api/webhooks';
 
 // Import callable functions
+import { generateEditSuggestions, getAgentStatus, orchestrateRoadmap, requestDecisionSupport, trackProgress, triggerRepositoryScan } from './api/agentCallableFunctions';
 import { createProject, getAllProjects, getChatHistory, getProject, getRoadmap, sendMessage } from './api/chatCallableFunctions';
 import { connectGitHub, syncProjectWithGitHub, verifyGitHub } from './api/githubCallableFunctions';
 import { getUser, getUsers, loginUser, registerUser, updateUser, userDeparture } from './api/userCallableFunctions';
@@ -24,7 +25,7 @@ export {
 };
 
 // Export callable functions
-export { connectGitHub, createProject, getAllProjects, getChatHistory, getProject, getRoadmap, getUser, getUsers, loginUser, registerUser, sendMessage, syncProjectWithGitHub, updateUser, userDeparture, verifyGitHub };
+export { connectGitHub, createProject, generateEditSuggestions, getAgentStatus, getAllProjects, getChatHistory, getProject, getRoadmap, getUser, getUsers, loginUser, orchestrateRoadmap, registerUser, requestDecisionSupport, sendMessage, syncProjectWithGitHub, trackProgress, triggerRepositoryScan, updateUser, userDeparture, verifyGitHub };
 
 // Agent configuration
 export { AGENT_CONFIG } from './config/agents.config';

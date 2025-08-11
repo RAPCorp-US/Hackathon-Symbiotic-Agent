@@ -198,180 +198,117 @@ export const firebaseFunctions = {
         return await callFunction('syncProjectWithGitHub', { userId, projectId });
     },
 
-    // NEW SCANNER FUNCTIONS - Using HTTP endpoints instead of callable functions
-    async getScannerStatus() {
-        console.log('🎯 FRONTEND: Calling getScannerStatus via HTTP endpoint');
-
-        const timestamp = new Date().toISOString();
-        const url = `${BASE_URL}/scannerApi/status`;
-
-        console.log(`🚀 [${timestamp}] SCANNER: Calling HTTP endpoint:`, url);
-
+    // NEW AGENT CALLABLE FUNCTIONS - All using onCall architecture with intense logging
+    async getAgentStatus() {
+        console.log('🎯 FRONTEND: Calling getAgentStatus via Firebase SDK');
         try {
-            const startTime = performance.now();
-
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+            const getAgentStatusFunction = httpsCallable(functions, 'getAgentStatus');
+            const result = await getAgentStatusFunction({});
+            const data = result.data as any;
+            console.log('🎯 FRONTEND: getAgentStatus result received:', {
+                success: data?.success,
+                agentCount: data?.status?.agents ? Object.keys(data.status.agents).length : 0,
+                message: data?.status?.message,
+                timestamp: data?.timestamp
             });
-
-            const endTime = performance.now();
-            const duration = Math.round(endTime - startTime);
-
-            console.log(`📡 [${timestamp}] SCANNER: HTTP response received:`, {
-                status: response.status,
-                statusText: response.statusText,
-                duration: duration + 'ms',
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error(`❌ [${timestamp}] SCANNER: HTTP call failed:`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    errorBody: errorBody,
-                    url: url
-                });
-                throw new Error(`Scanner status call failed: ${response.statusText} - ${errorBody}`);
-            }
-
-            const result = await response.json();
-
-            console.log('🎯 FRONTEND: getScannerStatus result received:', {
-                agentManagerInitialized: result?.agentManagerStatus?.initialized,
-                totalAgents: result?.agentManagerStatus?.agents ? Object.keys(result.agentManagerStatus.agents).length : 0,
-                scannerManagerFound: result?.scannerDetails?.available
-            });
-
-            return result;
-
+            return data;
         } catch (error) {
-            console.error(`💥 [${timestamp}] SCANNER: HTTP call exception:`, {
-                error: error instanceof Error ? error.message : String(error),
-                errorStack: error instanceof Error ? error.stack : 'No stack',
-                url: url
-            });
+            console.error('🚨 FRONTEND: getAgentStatus error:', error);
             throw error;
         }
     },
 
-    async triggerRepositoryScan(projectId: string, scanType: string = 'medium', repoUrl?: string, githubToken?: string) {
-        console.log('🎯 FRONTEND: Calling triggerRepositoryScan via HTTP endpoint with:', { projectId, scanType, repoUrl: repoUrl || 'none', hasToken: !!githubToken });
-
-        const timestamp = new Date().toISOString();
-        const url = `${BASE_URL}/scannerApi/scan`;
-
-        console.log(`🚀 [${timestamp}] SCANNER: Calling HTTP endpoint:`, url);
-
+    async triggerRepositoryScanAgent(projectId: string, scanOptions: any = {}) {
+        console.log('🎯 FRONTEND: Calling triggerRepositoryScan via Firebase SDK with:', { projectId, scanOptions });
         try {
-            const startTime = performance.now();
-
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ projectId, scanType, repoUrl, githubToken })
-            });
-
-            const endTime = performance.now();
-            const duration = Math.round(endTime - startTime);
-
-            console.log(`📡 [${timestamp}] SCANNER: HTTP response received:`, {
-                status: response.status,
-                statusText: response.statusText,
-                duration: duration + 'ms',
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error(`❌ [${timestamp}] SCANNER: HTTP call failed:`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    errorBody: errorBody,
-                    url: url
-                });
-                throw new Error(`Repository scan call failed: ${response.statusText} - ${errorBody}`);
-            }
-
-            const result = await response.json();
-
+            const triggerScanFunction = httpsCallable(functions, 'triggerRepositoryScan');
+            const result = await triggerScanFunction({ projectId, scanOptions });
+            const data = result.data as any;
             console.log('🎯 FRONTEND: triggerRepositoryScan result received:', {
-                scanTriggered: result?.scanTriggered,
-                hasResult: !!result?.scanResult,
-                scanType: result?.scanType
+                success: data?.success,
+                message: data?.message,
+                scanResults: data?.scanResults,
+                timestamp: data?.timestamp
             });
-
-            return result;
-
+            return data;
         } catch (error) {
-            console.error(`💥 [${timestamp}] SCANNER: HTTP call exception:`, {
-                error: error instanceof Error ? error.message : String(error),
-                errorStack: error instanceof Error ? error.stack : 'No stack',
-                url: url
-            });
+            console.error('🚨 FRONTEND: triggerRepositoryScan error:', error);
             throw error;
         }
     },
 
-    async getScanResults(projectId: string) {
-        console.log('🎯 FRONTEND: Calling getScanResults via HTTP endpoint with projectId:', projectId);
-
-        const timestamp = new Date().toISOString();
-        const url = `${BASE_URL}/scannerApi/results/${projectId}`;
-
-        console.log(`🚀 [${timestamp}] SCANNER: Calling HTTP endpoint:`, url);
-
+    async requestDecisionSupport(decisionContext: any, options: any = {}) {
+        console.log('🎯 FRONTEND: Calling requestDecisionSupport via Firebase SDK with:', { decisionContext, options });
         try {
-            const startTime = performance.now();
-
-            const response = await fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+            const decisionFunction = httpsCallable(functions, 'requestDecisionSupport');
+            const result = await decisionFunction({ decisionContext, options });
+            const data = result.data as any;
+            console.log('🎯 FRONTEND: requestDecisionSupport result received:', {
+                success: data?.success,
+                message: data?.message,
+                recommendation: data?.recommendation,
+                timestamp: data?.timestamp
             });
-
-            const endTime = performance.now();
-            const duration = Math.round(endTime - startTime);
-
-            console.log(`📡 [${timestamp}] SCANNER: HTTP response received:`, {
-                status: response.status,
-                statusText: response.statusText,
-                duration: duration + 'ms',
-                ok: response.ok
-            });
-
-            if (!response.ok) {
-                const errorBody = await response.text();
-                console.error(`❌ [${timestamp}] SCANNER: HTTP call failed:`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    errorBody: errorBody,
-                    url: url
-                });
-                throw new Error(`Get scan results call failed: ${response.statusText} - ${errorBody}`);
-            }
-
-            const result = await response.json();
-
-            console.log('🎯 FRONTEND: getScanResults result received:', {
-                resultsFound: result?.totalResults || 0,
-                projectId: result?.projectId
-            });
-
-            return result;
-
+            return data;
         } catch (error) {
-            console.error(`💥 [${timestamp}] SCANNER: HTTP call exception:`, {
-                error: error instanceof Error ? error.message : String(error),
-                errorStack: error instanceof Error ? error.stack : 'No stack',
-                url: url
+            console.error('🚨 FRONTEND: requestDecisionSupport error:', error);
+            throw error;
+        }
+    },
+
+    async generateEditSuggestions(codeContext: any, editRequest: any = {}) {
+        console.log('🎯 FRONTEND: Calling generateEditSuggestions via Firebase SDK with:', { codeContext, editRequest });
+        try {
+            const editFunction = httpsCallable(functions, 'generateEditSuggestions');
+            const result = await editFunction({ codeContext, editRequest });
+            const data = result.data as any;
+            console.log('🎯 FRONTEND: generateEditSuggestions result received:', {
+                success: data?.success,
+                message: data?.message,
+                suggestions: data?.suggestions,
+                timestamp: data?.timestamp
             });
+            return data;
+        } catch (error) {
+            console.error('🚨 FRONTEND: generateEditSuggestions error:', error);
+            throw error;
+        }
+    },
+
+    async trackProgress(projectId: string, progressData: any = {}) {
+        console.log('🎯 FRONTEND: Calling trackProgress via Firebase SDK with:', { projectId, progressData });
+        try {
+            const progressFunction = httpsCallable(functions, 'trackProgress');
+            const result = await progressFunction({ projectId, progressData });
+            const data = result.data as any;
+            console.log('🎯 FRONTEND: trackProgress result received:', {
+                success: data?.success,
+                message: data?.message,
+                progressStatus: data?.progressStatus,
+                timestamp: data?.timestamp
+            });
+            return data;
+        } catch (error) {
+            console.error('🚨 FRONTEND: trackProgress error:', error);
+            throw error;
+        }
+    },
+
+    async orchestrateRoadmap(projectId: string, requirements: any = {}) {
+        console.log('🎯 FRONTEND: Calling orchestrateRoadmap via Firebase SDK with:', { projectId, requirements });
+        try {
+            const roadmapFunction = httpsCallable(functions, 'orchestrateRoadmap');
+            const result = await roadmapFunction({ projectId, requirements });
+            const data = result.data as any;
+            console.log('🎯 FRONTEND: orchestrateRoadmap result received:', {
+                success: data?.success,
+                message: data?.message,
+                roadmap: data?.roadmap,
+                timestamp: data?.timestamp
+            });
+            return data;
+        } catch (error) {
+            console.error('🚨 FRONTEND: orchestrateRoadmap error:', error);
             throw error;
         }
     }

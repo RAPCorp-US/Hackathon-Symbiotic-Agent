@@ -1,5 +1,16 @@
+import { admin as adminEndpoints } from './api/adminEndpoints';
+import { chat } from './api/chatEndpoints';
+import { github } from './api/githubEndpoints';
+import { simpleUsers } from './api/simpleUsers';
+import { socket } from './api/socketEndpoint';
+import { testCors } from './api/testCors';
+import { test } from './api/testEndpoint';
+import { users } from './api/userEndpoints';
+import { webhooks } from './api/webhooks';
+import { generateEditSuggestions, getAgentStatus, orchestrateRoadmap, requestDecisionSupport, trackProgress, triggerRepositoryScan } from './api/agentCallableFunctions';
 import { createProject, getAllProjects, getChatHistory, getProject, getRoadmap, sendMessage } from './api/chatCallableFunctions';
 import { connectGitHub, syncProjectWithGitHub, verifyGitHub } from './api/githubCallableFunctions';
 import { getUser, getUsers, loginUser, registerUser, updateUser, userDeparture } from './api/userCallableFunctions';
-export { connectGitHub, createProject, getAllProjects, getChatHistory, getProject, getRoadmap, getUser, getUsers, loginUser, registerUser, sendMessage, syncProjectWithGitHub, updateUser, userDeparture, verifyGitHub };
+export { adminEndpoints as admin, chat, github, simpleUsers, socket, test, testCors, users, webhooks };
+export { connectGitHub, createProject, generateEditSuggestions, getAgentStatus, getAllProjects, getChatHistory, getProject, getRoadmap, getUser, getUsers, loginUser, orchestrateRoadmap, registerUser, requestDecisionSupport, sendMessage, syncProjectWithGitHub, trackProgress, triggerRepositoryScan, updateUser, userDeparture, verifyGitHub };
 export { AGENT_CONFIG } from './config/agents.config';

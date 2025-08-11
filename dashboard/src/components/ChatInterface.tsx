@@ -29,28 +29,39 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     const [newMessage, setNewMessage] = useState('');
     const [isConnected] = useState(true); // Simulated connection for Firebase Functions
     const [isTyping, setIsTyping] = useState(false);
+    const [isLoadingHistory, setIsLoadingHistory] = useState(true);
+    const [historyError, setHistoryError] = useState<string | null>(null);
     // const [socket, setSocket] = useState<Socket | null>(null); // Disabled for Firebase Functions
     const messagesEndRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
     // Initialize simulated connection (Firebase Functions compatibility)
     useEffect(() => {
-        console.log('Chat interface initialized for Firebase Functions');
+        console.log('🚀 CHAT: Chat interface initialized for Firebase Functions');
+        setIsLoadingHistory(true);
+        setHistoryError(null);
 
         // Load initial messages from API
         const loadChatHistory = async () => {
             try {
+                console.log('📡 CHAT: Loading chat history for userId:', userId, 'projectId:', projectId);
                 const data = await firebaseFunctions.getChatHistory(userId, projectId);
+                console.log('✅ CHAT: Chat history loaded successfully:', data);
                 setMessages(data.messages || []);
+                setHistoryError(null);
             } catch (error) {
-                console.error('Failed to load chat history:', error);
+                console.error('❌ CHAT: Failed to load chat history:', error);
+                setHistoryError('Failed to load chat history. Please refresh the page.');
+                setMessages([]); // Set empty messages on error
+            } finally {
+                setIsLoadingHistory(false);
             }
         };
 
         loadChatHistory();
 
         return () => {
-            console.log('Chat interface cleanup');
+            console.log('🧹 CHAT: Chat interface cleanup');
         };
     }, [userId, projectId]);
 
@@ -73,10 +84,17 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
         // Add message to local state immediately
         setMessages(prev => [...prev, message]);
+        setNewMessage('');
+        
+        // Show AI is processing
+        setIsTyping(true);
 
         // Send to backend for AI processing via Firebase Functions
         try {
+            console.log('📤 CHAT: Sending message:', newMessage.trim());
             const data = await firebaseFunctions.sendMessage(userId, newMessage.trim(), projectId);
+            console.log('✅ CHAT: Message sent successfully:', data);
+            
             if (data.response) {
                 // Add AI response to messages
                 setMessages(prev => [...prev, {
@@ -89,13 +107,20 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 }]);
             }
         } catch (error) {
-            console.error('Failed to send message:', error);
+            console.error('❌ CHAT: Failed to send message:', error);
+            // Add error message to chat
+            setMessages(prev => [...prev, {
+                id: `error-${Date.now()}`,
+                userId: 'system',
+                userName: 'System',
+                content: 'Failed to send message. Please try again.',
+                timestamp: Date.now(),
+                type: 'system'
+            }]);
+        } finally {
+            setIsTyping(false);
         }
 
-        // Show AI is processing
-        setIsTyping(true);
-
-        setNewMessage('');
         inputRef.current?.focus();
     };
 
@@ -149,15 +174,34 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
 
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-96">
-                {messages.length === 0 && (
+                {isLoadingHistory ? (
+                    <div className="text-center text-gray-500 py-8">
+                        <div className="text-4xl mb-2">⏳</div>
+                        <p>Loading chat history...</p>
+                        <div className="flex justify-center mt-4">
+                            <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                        </div>
+                    </div>
+                ) : historyError ? (
+                    <div className="text-center text-red-500 py-8">
+                        <div className="text-4xl mb-2">⚠️</div>
+                        <p>{historyError}</p>
+                        <button 
+                            onClick={() => window.location.reload()} 
+                            className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                        >
+                            Refresh Page
+                        </button>
+                    </div>
+                ) : messages.length === 0 ? (
                     <div className="text-center text-gray-500 py-8">
                         <div className="text-4xl mb-2">🚀</div>
                         <p>Welcome to your Hackathon Assistant!</p>
                         <p className="text-sm mt-1">Ask me anything about your project, team coordination, or technical questions.</p>
                     </div>
-                )}
+                ) : null}
 
-                {messages.map((message) => (
+                {!isLoadingHistory && !historyError && messages.map((message) => (
                     <div
                         key={message.id}
                         className={`flex ${message.userId === userId ? 'justify-end' : 'justify-start'}`}
