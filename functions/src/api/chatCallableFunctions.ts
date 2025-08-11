@@ -156,26 +156,84 @@ export const sendMessage = functions.https.onCall(async (data, context) => {
         const db = getFirestore();
         const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-        // Save message to Firestore
+        console.log('🤖 Processing message with AI...');
+
+        // Import AI services
+        const { AIProviders } = await import('../services/aiProviders');
+        const aiProviders = AIProviders.getInstance();
+        const openai = aiProviders.getOpenAI();
+
+        // Generate AI response
+        const response = await openai.chat.completions.create({
+            model: 'gpt-4o-mini',
+            messages: [
+                {
+                    role: 'system',
+                    content: `You are a helpful AI assistant for a hackathon coordination system. The user is working on their project and may need help with planning, coding, or coordination. Provide helpful, concise responses.
+
+Project Context: ${JSON.stringify(projectContext || {}, null, 2)}`
+                },
+                {
+                    role: 'user',
+                    content: message
+                }
+            ],
+            max_tokens: 500,
+            temperature: 0.7
+        });
+
+        const aiResponse = response.choices[0]?.message?.content || 'Sorry, I could not generate a response at this time.';
+
+        console.log('✅ AI response generated:', aiResponse.substring(0, 100) + '...');
+
+        // Save both user message and AI response
         await db.collection('processed_messages').doc(messageId).set({
             userId,
             message,
             projectContext: projectContext || {},
             timestamp: Date.now(),
-            status: 'received'
+            status: 'processed',
+            aiResponse,
+            responseTimestamp: Date.now()
         });
 
-        console.log('Message saved:', messageId);
+        console.log('✅ Message and response saved:', messageId);
 
         return {
             success: true,
             messageId,
-            message: 'Message received and queued for processing',
+            message: 'Message processed successfully',
+            response: aiResponse,
             timestamp: Date.now()
         };
     } catch (error) {
-        console.error('Error sending message:', error);
-        throw new functions.https.HttpsError('internal', 'Failed to send message', error);
+        console.error('Error processing message:', error);
+
+        // Fallback: still save the message even if AI fails
+        try {
+            const db = getFirestore();
+            const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+            await db.collection('processed_messages').doc(messageId).set({
+                userId,
+                message,
+                projectContext: projectContext || {},
+                timestamp: Date.now(),
+                status: 'received',
+                error: 'AI processing failed'
+            });
+
+            return {
+                success: true,
+                messageId,
+                message: 'Message received (AI processing temporarily unavailable)',
+                response: 'I apologize, but I am temporarily unable to process your message. Your message has been saved and will be reviewed.',
+                timestamp: Date.now()
+            };
+        } catch (saveError) {
+            console.error('Failed to save message after AI error:', saveError);
+            throw new functions.https.HttpsError('internal', 'Failed to process message', error);
+        }
     }
 });
 
@@ -821,9 +879,9 @@ export const getAllProjects = functions.https.onCall(async (data, context) => {
             projects.push(project);
         }
 
-        // Filter to only return open projects that aren't full
+        // Filter to only return active/open projects that aren't full
         const availableProjects = projects.filter(project =>
-            project.status === 'open' &&
+            (project.status === 'open' || project.status === 'active') &&
             (!project.maxParticipants || project.participantCount < project.maxParticipants)
         );
 
