@@ -355,32 +355,98 @@ export const getChatHistory = functions.https.onCall(async (data, context) => {
     try {
         const db = getFirestore();
 
-        // Build query - if we have a projectId, include it in the filter
+        console.log('🔍 CHAT HISTORY: Starting query for userId:', userId, 'projectId:', projectId);
+
+        // Get all messages for the user first (since project filtering is complex)
         let query = db.collection('processed_messages')
             .where('userId', '==', userId);
 
-        if (projectId) {
-            query = query.where('projectId', '==', projectId);
-        }
-
         const messages = await query
             .orderBy('timestamp', 'desc')
-            .limit(parseInt(limit))
+            .limit(parseInt(limit) * 2) // Get more to account for filtering
             .offset(parseInt(offset))
             .get();
 
-        console.log('Messages found:', messages.size);
+        console.log('🔍 CHAT HISTORY: Raw messages found:', messages.size);
 
-        const history = messages.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
+        let filteredHistory = messages.docs.map(doc => {
+            const data = doc.data();
+            return {
+                id: doc.id,
+                userId: data.userId,
+                userName: data.userName || 'User',
+                content: data.message || data.content || '',
+                timestamp: data.timestamp,
+                type: data.type || 'user',
+                projectContext: data.projectContext,
+                aiResponse: data.aiResponse,
+                response: data.response
+            };
+        });
+
+        // Filter by project if projectId is provided
+        if (projectId) {
+            const beforeFilter = filteredHistory.length;
+            filteredHistory = filteredHistory.filter((msg: any) => {
+                // Handle different projectContext formats (same logic as getCommunicationMetrics)
+                if (!msg.projectContext) {
+                    return false; // No project context, don't include
+                }
+                if (typeof msg.projectContext === 'string') {
+                    return msg.projectContext === projectId;
+                } else if (typeof msg.projectContext === 'object' && msg.projectContext !== null) {
+                    return msg.projectContext.projectId === projectId ||
+                        msg.projectContext.id === projectId;
+                }
+                return false;
+            });
+            console.log(`🔍 CHAT HISTORY: Filtered from ${beforeFilter} to ${filteredHistory.length} messages for project ${projectId}`);
+        } else {
+            console.log('🔍 CHAT HISTORY: No project filter applied, returning all user messages');
+        }
+
+        // Convert to chat message format
+        const chatMessages = filteredHistory.map((msg: any) => ({
+            id: msg.id,
+            userId: msg.userId,
+            userName: msg.userName,
+            content: msg.content,
+            timestamp: msg.timestamp,
+            type: msg.type
         }));
+
+        // Add AI responses as separate messages
+        const allMessages: any[] = [];
+        chatMessages.forEach((msg: any) => {
+            allMessages.push(msg);
+
+            // Add AI response if it exists
+            const originalMsg = filteredHistory.find((fm: any) => fm.id === msg.id);
+            if (originalMsg && (originalMsg.aiResponse || originalMsg.response)) {
+                allMessages.push({
+                    id: msg.id + '_ai_response',
+                    userId: 'ai',
+                    userName: 'Hackathon Agent',
+                    content: originalMsg.aiResponse || originalMsg.response,
+                    timestamp: msg.timestamp + 1, // Slightly after user message
+                    type: 'ai'
+                });
+            }
+        });
+
+        // Sort by timestamp again
+        allMessages.sort((a, b) => a.timestamp - b.timestamp);
+
+        // Limit to requested amount
+        const finalMessages = allMessages.slice(0, parseInt(limit));
+
+        console.log('✅ CHAT HISTORY: Returning', finalMessages.length, 'messages');
 
         return {
             success: true,
-            messages: history,
-            total: messages.size,
-            hasMore: messages.size === parseInt(limit)
+            messages: finalMessages,
+            total: finalMessages.length,
+            hasMore: allMessages.length > parseInt(limit)
         };
     } catch (error) {
         console.error('Error fetching chat history:', error);
