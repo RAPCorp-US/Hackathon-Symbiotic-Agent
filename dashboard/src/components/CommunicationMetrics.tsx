@@ -1,5 +1,6 @@
 // dashboard/src/components/CommunicationMetrics.tsx
 import React, { useEffect, useState } from 'react';
+import { firebaseFunctions } from '../utils/firebaseFunctions';
 
 interface MessageStats {
     totalMessages: number;
@@ -53,46 +54,38 @@ export const CommunicationMetrics: React.FC<CommunicationMetricsProps> = ({
     useEffect(() => {
         const fetchRealData = async () => {
             const fetchStartTime = new Date().toISOString();
-            const backendUrl = `${import.meta.env.VITE_BACKEND_URL}/simpleUsers`;
 
             console.log(`🚀 [${fetchStartTime}] COMMUNICATIONMETRICS: Starting fetchRealData`, {
                 projectId,
                 timeframe,
-                backendUrl,
                 component: 'CommunicationMetrics'
             });
 
             try {
-                console.log(`📡 [${fetchStartTime}] COMMUNICATIONMETRICS: About to call fetch to simpleUsers`);
+                console.log(`📡 [${fetchStartTime}] COMMUNICATIONMETRICS: About to call firebaseFunctions.getUsers`);
 
                 const startTime = performance.now();
 
-                // Fetch real users from backend
-                const response = await fetch(backendUrl);
+                // Fetch real users from backend using Firebase Functions
+                const result = await firebaseFunctions.getUsers() as any;
 
                 const endTime = performance.now();
                 const duration = Math.round(endTime - startTime);
 
-                console.log(`📡 [${fetchStartTime}] COMMUNICATIONMETRICS: Fetch response received`, {
-                    status: response.status,
-                    statusText: response.statusText,
-                    ok: response.ok,
+                console.log(`📡 [${fetchStartTime}] COMMUNICATIONMETRICS: Firebase function response received`, {
+                    success: result?.success,
                     duration: duration + 'ms',
-                    headers: Object.fromEntries(response.headers.entries())
+                    resultKeys: Object.keys(result || {})
                 });
 
-                if (!response.ok) {
-                    const errorBody = await response.text();
-                    console.error(`❌ [${fetchStartTime}] COMMUNICATIONMETRICS: Fetch failed`, {
-                        status: response.status,
-                        statusText: response.statusText,
-                        errorBody,
-                        backendUrl
+                if (!result.success) {
+                    console.error(`❌ [${fetchStartTime}] COMMUNICATIONMETRICS: Firebase function failed`, {
+                        message: result.message,
+                        error: result.error
                     });
-                    throw new Error('Failed to fetch users');
+                    throw new Error(result.message || 'Failed to fetch users');
                 }
 
-                const result = await response.json();
                 const realUsers = result.users || [];
 
                 console.log(`✅ [${fetchStartTime}] COMMUNICATIONMETRICS: Successfully fetched users`, {
@@ -179,8 +172,7 @@ export const CommunicationMetrics: React.FC<CommunicationMetricsProps> = ({
                 const errorTime = new Date().toISOString();
                 console.error(`💥 [${errorTime}] COMMUNICATIONMETRICS: Error fetching real data:`, {
                     error: error instanceof Error ? error.message : String(error),
-                    errorStack: error instanceof Error ? error.stack : 'No stack',
-                    backendUrl
+                    errorStack: error instanceof Error ? error.stack : 'No stack'
                 });
 
                 // Fallback for offline mode - show getting started state

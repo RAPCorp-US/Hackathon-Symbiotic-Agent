@@ -1,5 +1,6 @@
 // User Registration and Authentication Integration
 import { useEffect, useState } from 'react';
+import { firebaseFunctions } from '../utils/firebaseFunctions';
 
 interface UserRegistrationData {
     name: string;
@@ -15,14 +16,13 @@ export const useUserRegistration = () => {
 
     const registerUser = async (userData: UserRegistrationData) => {
         try {
-            // Connect to your actual backend API
-            const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/users`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(userData)
-            });
+            // Connect to Firebase Functions
+            const result = await firebaseFunctions.registerUser(userData) as any;
 
-            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.message || 'Registration failed');
+            }
+
             setUser(result.user);
             setIsRegistered(true);
 
@@ -44,12 +44,8 @@ export const useRoadmapData = (projectId: string, userId: string) => {
     useEffect(() => {
         const fetchRoadmap = async () => {
             try {
-                // Connect to your RoadmapOrchestrator
-                const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/chat/roadmap/${projectId}`, {
-                    headers: { 'Authorization': `Bearer ${userId}` }
-                });
-
-                const data = await response.json();
+                // Connect to Firebase Functions
+                const data = await firebaseFunctions.getRoadmap(projectId) as any;
                 setRoadmap(data);
                 setIsLoading(false);
             } catch (error) {

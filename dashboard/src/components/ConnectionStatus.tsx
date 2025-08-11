@@ -1,5 +1,6 @@
 import { AlertTriangle, Wifi } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { firebaseFunctions } from '../utils/firebaseFunctions';
 
 interface ConnectionStatusProps {
     className?: string;
@@ -11,11 +12,9 @@ export const ConnectionStatus: React.FC<ConnectionStatusProps> = ({ className = 
     useEffect(() => {
         const checkConnection = async () => {
             try {
-                const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/simpleUsers`, {
-                    method: 'GET', // Use GET instead of HEAD
-                    signal: AbortSignal.timeout(5000) // 5 second timeout
-                });
-                setIsConnected(response.ok);
+                // Test connection using Firebase Functions
+                await firebaseFunctions.getUsers();
+                setIsConnected(true);
             } catch (error) {
                 setIsConnected(false);
             }

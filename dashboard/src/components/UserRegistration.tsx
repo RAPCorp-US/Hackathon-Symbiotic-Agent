@@ -1,5 +1,6 @@
 import { Loader2, UserPlus } from 'lucide-react';
 import React, { useState } from 'react';
+import { firebaseFunctions } from '../utils/firebaseFunctions';
 
 interface UserRegistrationData {
     name: string;
@@ -62,44 +63,27 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onRegistrati
 
         try {
             if (isLogin) {
-                // Login existing user
-                const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/simpleUsers/login`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: formData.email,
-                        password: formData.password
-                    }),
-                });
+                // Login existing user using Firebase Functions
+                const result = await firebaseFunctions.loginUser(formData.email, formData.password) as any;
 
-                if (!response.ok) {
-                    throw new Error('Login failed - check your email and password');
+                if (!result.success) {
+                    throw new Error(result.message || 'Login failed - check your email and password');
                 }
 
-                const result = await response.json();
                 localStorage.setItem('hackathon_user', JSON.stringify(result.user));
                 onRegistrationComplete(result.user);
             } else {
-                // Register new user
-                const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/simpleUsers`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        ...formData,
-                        registrationTime: Date.now(),
-                        status: 'active'
-                    }),
-                });
+                // Register new user using Firebase Functions
+                const result = await firebaseFunctions.registerUser({
+                    ...formData,
+                    registrationTime: Date.now(),
+                    status: 'active'
+                }) as any;
 
-                if (!response.ok) {
-                    throw new Error('Registration failed');
+                if (!result.success) {
+                    throw new Error(result.message || 'Registration failed');
                 }
 
-                const result = await response.json();
                 localStorage.setItem('hackathon_user', JSON.stringify(result.user));
                 onRegistrationComplete(result.user);
             }
@@ -134,8 +118,8 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onRegistrati
                             type="button"
                             onClick={() => setIsLogin(false)}
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${!isLogin
-                                    ? 'bg-white text-indigo-600 shadow-sm'
-                                    : 'text-gray-500 hover:text-gray-700'
+                                ? 'bg-white text-indigo-600 shadow-sm'
+                                : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
                             Register
@@ -144,8 +128,8 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onRegistrati
                             type="button"
                             onClick={() => setIsLogin(true)}
                             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${isLogin
-                                    ? 'bg-white text-indigo-600 shadow-sm'
-                                    : 'text-gray-500 hover:text-gray-700'
+                                ? 'bg-white text-indigo-600 shadow-sm'
+                                : 'text-gray-500 hover:text-gray-700'
                                 }`}
                         >
                             Login

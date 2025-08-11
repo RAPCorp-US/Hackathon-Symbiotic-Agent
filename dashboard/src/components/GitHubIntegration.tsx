@@ -1,6 +1,7 @@
 // dashboard/src/components/GitHubIntegration.tsx
 import { AlertCircle, CheckCircle, Github, Key, Link, Lock } from 'lucide-react';
 import React, { useState } from 'react';
+import { firebaseFunctions } from '../utils/firebaseFunctions';
 
 interface GitHubIntegrationProps {
     onRepoLinked: (repoData: any) => void;
@@ -40,35 +41,21 @@ export const GitHubIntegration: React.FC<GitHubIntegrationProps> = ({ onRepoLink
             const [, owner, repo] = match;
             const cleanRepo = repo.replace('.git', '');
 
-            // Verify GitHub token and repo access
-            const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/github/verify`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    owner,
-                    repo: cleanRepo,
-                    token: githubToken,
-                    repoUrl
-                }),
-            });
+            // Verify GitHub token and repo access using Firebase Functions
+            const verifyResult = await firebaseFunctions.verifyGitHub(githubToken) as any;
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to verify GitHub access');
+            if (!verifyResult.success) {
+                throw new Error(verifyResult.error || 'Failed to verify GitHub access');
             }
-
-            const result = await response.json();
 
             setIsConnected(true);
             onRepoLinked({
                 owner,
                 repo: cleanRepo,
                 url: repoUrl,
-                isPrivate: result.isPrivate,
-                permissions: result.permissions,
-                lastCommit: result.lastCommit
+                isPrivate: verifyResult.isPrivate || false,
+                permissions: verifyResult.permissions || {},
+                lastCommit: verifyResult.lastCommit || null
             });
 
         } catch (err) {

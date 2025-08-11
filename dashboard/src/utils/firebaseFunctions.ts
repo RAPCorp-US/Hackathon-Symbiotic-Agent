@@ -16,11 +16,16 @@ if (getApps().length === 0) {
     app = getApps()[0];
 }
 
-const functions = getFunctions(app);
+const functions = getFunctions(app, 'us-central1');
 
-const FIREBASE_PROJECT_ID = 'hackathon-agent-ce35f';
-const REGION = 'us-central1';
-const BASE_URL = `https://${REGION}-${FIREBASE_PROJECT_ID}.cloudfunctions.net`;
+// Explicitly ensure we're NOT using emulator
+// Clear any emulator settings that might be cached
+console.log('🔧 Firebase Functions Configuration:', {
+    app: app.name,
+    projectId: app.options.projectId,
+    functionsRegion: 'us-central1',
+    expectedURL: 'https://us-central1-hackathon-agent-ce35f.cloudfunctions.net'
+});
 
 // Helper function to call Firebase Callable Functions using the proper SDK
 async function callCallableFunction(functionName: string, data: any = {}) {
@@ -35,7 +40,10 @@ async function callCallableFunction(functionName: string, data: any = {}) {
     try {
         const startTime = performance.now();
 
+        console.log(`🔧 [${timestamp}] Creating callable function for:`, functionName);
         const callableFunction = httpsCallable(functions, functionName);
+        console.log(`🔧 [${timestamp}] Callable function created, calling with data:`, data);
+        
         const result = await callableFunction(data);
 
         const endTime = performance.now();
