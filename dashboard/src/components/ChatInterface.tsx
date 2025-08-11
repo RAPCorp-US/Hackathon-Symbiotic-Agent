@@ -38,6 +38,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     // Initialize simulated connection (Firebase Functions compatibility)
     useEffect(() => {
         console.log('🚀 CHAT: Chat interface initialized for Firebase Functions');
+        console.log('🔍 CHAT: Parameters received:', { userId, userName, projectId });
         setIsLoadingHistory(true);
         setHistoryError(null);
 
@@ -45,9 +46,28 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         const loadChatHistory = async () => {
             try {
                 console.log('📡 CHAT: Loading chat history for userId:', userId, 'projectId:', projectId);
-                const data = await firebaseFunctions.getChatHistory(userId, projectId);
-                console.log('✅ CHAT: Chat history loaded successfully:', data);
-                setMessages(data.messages || []);
+                const data = await firebaseFunctions.getChatHistory(userId, projectId) as any;
+                console.log('✅ CHAT: Chat history loaded successfully:', {
+                    success: data.success,
+                    messagesCount: data.messages?.length || 0,
+                    total: data.total,
+                    hasMore: data.hasMore,
+                    sampleMessage: data.messages?.[0] || null,
+                    fullResponse: data
+                });
+
+                // Convert backend message format to frontend format if needed
+                const formattedMessages = (data.messages || []).map((msg: any) => ({
+                    id: msg.id,
+                    userId: msg.userId,
+                    userName: msg.userName || 'User',
+                    content: msg.content, // Backend already returns 'content' field
+                    timestamp: msg.timestamp,
+                    type: msg.type || 'user'
+                }));
+
+                console.log('📝 CHAT: Formatted messages:', formattedMessages);
+                setMessages(formattedMessages);
                 setHistoryError(null);
             } catch (error) {
                 console.error('❌ CHAT: Failed to load chat history:', error);
@@ -85,16 +105,16 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         // Add message to local state immediately
         setMessages(prev => [...prev, message]);
         setNewMessage('');
-        
+
         // Show AI is processing
         setIsTyping(true);
 
         // Send to backend for AI processing via Firebase Functions
         try {
             console.log('📤 CHAT: Sending message:', newMessage.trim());
-            const data = await firebaseFunctions.sendMessage(userId, newMessage.trim(), projectId);
+            const data = await firebaseFunctions.sendMessage(userId, newMessage.trim(), projectId) as any;
             console.log('✅ CHAT: Message sent successfully:', data);
-            
+
             if (data.response) {
                 // Add AI response to messages
                 setMessages(prev => [...prev, {
@@ -186,8 +206,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                     <div className="text-center text-red-500 py-8">
                         <div className="text-4xl mb-2">⚠️</div>
                         <p>{historyError}</p>
-                        <button 
-                            onClick={() => window.location.reload()} 
+                        <button
+                            onClick={() => window.location.reload()}
                             className="mt-2 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
                         >
                             Refresh Page
