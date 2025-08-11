@@ -64,7 +64,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthComplete }) => {
         try {
             if (isLogin) {
                 // Login existing user using Firebase Functions
-                const result = await firebaseFunctions.loginUser(formData.email, formData.password);
+                const result = await firebaseFunctions.loginUser(formData.email, formData.password) as any;
                 localStorage.setItem('hackathon_user', JSON.stringify(result.user));
                 onAuthComplete(result.user);
             } else {
@@ -73,7 +73,7 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthComplete }) => {
                     ...formData,
                     registrationTime: Date.now(),
                     status: 'active'
-                });
+                }) as any;
                 localStorage.setItem('hackathon_user', JSON.stringify(result.user));
                 onAuthComplete(result.user);
             }

@@ -88,8 +88,20 @@ export const firebaseFunctions = {
 
     async getRoadmap(projectId: string) {
         console.log('🎯 FRONTEND: Calling getRoadmap with projectId:', projectId);
-        const result = await callCallableFunction('getRoadmap', { projectId });
+        const result = await callCallableFunction('getRoadmap', { projectId }) as any;
+
+        // Log the full result structure to debug
+        console.log('🎯 FRONTEND: getRoadmap full result structure:', {
+            resultKeys: Object.keys(result || {}),
+            success: result?.success,
+            hasPhases: !!result?.phases,
+            hasTeamMembers: !!result?.teamMembers,
+            hasLastUpdated: !!result?.lastUpdated,
+            hasAiRecommendations: !!result?.aiRecommendations
+        });
+
         console.log('🎯 FRONTEND: getRoadmap result received:', {
+            success: result?.success,
             phases: result?.phases?.length || 0,
             teamMembers: result?.teamMembers?.length || 0,
             lastUpdated: result?.lastUpdated,

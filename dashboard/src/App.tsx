@@ -60,12 +60,12 @@ function App() {
 
                     // Verify user still exists in backend using Firebase Functions
                     try {
-                        const result = await firebaseFunctions.getUser(userData.id);
+                        const result = await firebaseFunctions.getUser(userData.id) as any;
                         setUser(result.user);
 
                         // Try to fetch project using Firebase Functions
                         try {
-                            const projectResult = await firebaseFunctions.getProject(userData.id);
+                            const projectResult = await firebaseFunctions.getProject(userData.id) as any;
                             if (projectResult.success && projectResult.project) {
                                 setProject(projectResult.project);
                                 setProjectId(projectResult.project.id); // Use actual project ID from backend
@@ -125,7 +125,7 @@ function App() {
         if (user) {
             try {
                 // Save project to backend using Firebase Functions
-                const result = await firebaseFunctions.createProject(user.id, projectData);
+                const result = await firebaseFunctions.createProject(user.id, projectData) as any;
                 if (result.success) {
                     setProjectId(result.projectId);
                 }
