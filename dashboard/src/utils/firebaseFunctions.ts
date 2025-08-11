@@ -1,5 +1,5 @@
 // dashboard/src/utils/firebaseFunctions.ts
-// Simple Firebase Callable Functions client without full Firebase SDK
+// Firebase Callable Functions client using proper Firebase SDK
 
 import { getApps, initializeApp } from 'firebase/app';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -22,14 +22,12 @@ const FIREBASE_PROJECT_ID = 'hackathon-agent-ce35f';
 const REGION = 'us-central1';
 const BASE_URL = `https://${REGION}-${FIREBASE_PROJECT_ID}.cloudfunctions.net`;
 
-// Helper function to call Firebase Callable Functions
-async function callFunction(functionName: string, data: any = {}) {
+// Helper function to call Firebase Callable Functions using the proper SDK
+async function callCallableFunction(functionName: string, data: any = {}) {
     const timestamp = new Date().toISOString();
-    const url = `${BASE_URL}/${functionName}`;
 
-    console.log(`🚀 [${timestamp}] STARTING API CALL:`, {
+    console.log(`🚀 [${timestamp}] STARTING CALLABLE FUNCTION:`, {
         function: functionName,
-        url: url,
         payload: JSON.stringify(data, null, 2),
         payloadSize: JSON.stringify(data).length + ' bytes'
     });
@@ -37,68 +35,29 @@ async function callFunction(functionName: string, data: any = {}) {
     try {
         const startTime = performance.now();
 
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ data })
-        });
+        const callableFunction = httpsCallable(functions, functionName);
+        const result = await callableFunction(data);
 
         const endTime = performance.now();
         const duration = Math.round(endTime - startTime);
 
-        console.log(`📡 [${timestamp}] API RESPONSE RECEIVED:`, {
-            function: functionName,
-            status: response.status,
-            statusText: response.statusText,
-            duration: duration + 'ms',
-            ok: response.ok,
-            headers: Object.fromEntries(response.headers.entries())
-        });
-
-        if (!response.ok) {
-            const errorBody = await response.text();
-            console.error(`❌ [${timestamp}] API CALL FAILED:`, {
-                function: functionName,
-                status: response.status,
-                statusText: response.statusText,
-                errorBody: errorBody,
-                url: url
-            });
-            throw new Error(`Function call failed: ${response.statusText} - ${errorBody}`);
-        }
-
-        const result = await response.json();
-
-        console.log(`✅ [${timestamp}] API CALL SUCCESS:`, {
+        console.log(`✅ [${timestamp}] CALLABLE FUNCTION SUCCESS:`, {
             function: functionName,
             duration: duration + 'ms',
-            resultType: typeof result,
-            resultKeys: result && typeof result === 'object' ? Object.keys(result) : 'N/A',
-            resultSize: JSON.stringify(result).length + ' bytes'
+            resultType: typeof result.data,
+            resultKeys: result.data && typeof result.data === 'object' ? Object.keys(result.data) : 'N/A',
+            resultSize: JSON.stringify(result.data).length + ' bytes'
         });
 
-        // Firebase callable functions return data in a 'result' field
-        const finalResult = result.result || result;
-
-        console.log(`🎯 [${timestamp}] FINAL RESULT EXTRACTED:`, {
-            function: functionName,
-            finalResultType: typeof finalResult,
-            finalResultKeys: finalResult && typeof finalResult === 'object' ? Object.keys(finalResult) : 'N/A',
-            previewData: JSON.stringify(finalResult).substring(0, 200) + (JSON.stringify(finalResult).length > 200 ? '...' : '')
-        });
-
-        return finalResult;
+        return result.data;
 
     } catch (error) {
-        const errorTime = performance.now();
-        console.error(`💥 [${timestamp}] API CALL EXCEPTION:`, {
+        console.error(`💥 [${timestamp}] CALLABLE FUNCTION EXCEPTION:`, {
             function: functionName,
             error: error instanceof Error ? error.message : String(error),
             errorStack: error instanceof Error ? error.stack : 'No stack',
-            url: url,
-            timeUntilError: Math.round(errorTime - performance.now()) + 'ms'
+            errorCode: (error as any)?.code,
+            errorDetails: (error as any)?.details
         });
         throw error;
     }
@@ -109,27 +68,27 @@ export const firebaseFunctions = {
     // Chat functions
     async getProject(userId: string) {
         console.log('🎯 FRONTEND: Calling getProject with userId:', userId);
-        return await callFunction('getProject', { userId });
+        return await callCallableFunction('getProject', { userId });
     },
 
     async getChatHistory(userId: string, projectId?: string, limit = 50, offset = 0) {
         console.log('🎯 FRONTEND: Calling getChatHistory with:', { userId, projectId, limit, offset });
-        return await callFunction('getChatHistory', { userId, projectId, limit, offset });
+        return await callCallableFunction('getChatHistory', { userId, projectId, limit, offset });
     },
 
     async createProject(userId: string, projectData: any, githubRepo?: string) {
         console.log('🎯 FRONTEND: Calling createProject with:', { userId, projectData, githubRepo });
-        return await callFunction('createProject', { userId, projectData, githubRepo });
+        return await callCallableFunction('createProject', { userId, projectData, githubRepo });
     },
 
     async sendMessage(userId: string, message: string, messageContext?: any) {
         console.log('🎯 FRONTEND: Calling sendMessage with:', { userId, message, messageContext });
-        return await callFunction('sendMessage', { userId, message, messageContext });
+        return await callCallableFunction('sendMessage', { userId, message, messageContext });
     },
 
     async getRoadmap(projectId: string) {
         console.log('🎯 FRONTEND: Calling getRoadmap with projectId:', projectId);
-        const result = await callFunction('getRoadmap', { projectId });
+        const result = await callCallableFunction('getRoadmap', { projectId });
         console.log('🎯 FRONTEND: getRoadmap result received:', {
             phases: result?.phases?.length || 0,
             teamMembers: result?.teamMembers?.length || 0,
@@ -141,61 +100,49 @@ export const firebaseFunctions = {
 
     async getAllProjects() {
         console.log('🎯 FRONTEND: Calling getAllProjects via Firebase SDK');
-        try {
-            const getAllProjectsFunction = httpsCallable(functions, 'getAllProjects');
-            const result = await getAllProjectsFunction({});
-            const data = result.data as any;
-            console.log('🎯 FRONTEND: getAllProjects result received:', {
-                projectCount: data?.projects?.length || 0,
-                projects: data?.projects || []
-            });
-            return data;
-        } catch (error) {
-            console.error('🚨 FRONTEND: getAllProjects error:', error);
-            throw error;
-        }
+        return await callCallableFunction('getAllProjects', {});
     },
 
     // User functions
     async registerUser(userData: any) {
         console.log('🎯 FRONTEND: Calling registerUser with userData:', userData);
-        return await callFunction('registerUser', userData);
+        return await callCallableFunction('registerUser', userData);
     },
 
     async loginUser(email: string, password: string) {
         console.log('🎯 FRONTEND: Calling loginUser with email:', email);
-        return await callFunction('loginUser', { email, password });
+        return await callCallableFunction('loginUser', { email, password });
     },
 
     async getUsers() {
         console.log('🎯 FRONTEND: Calling getUsers');
-        return await callFunction('getUsers', {});
+        return await callCallableFunction('getUsers', {});
     },
 
     async getUser(userId: string) {
         console.log('🎯 FRONTEND: Calling getUser with userId:', userId);
-        return await callFunction('getUser', { userId });
+        return await callCallableFunction('getUser', { userId });
     },
 
     async updateUser(userId: string, updates: any) {
         console.log('🎯 FRONTEND: Calling updateUser with:', { userId, updates });
-        return await callFunction('updateUser', { userId, updates });
+        return await callCallableFunction('updateUser', { userId, updates });
     },
 
     // GitHub functions
     async verifyGitHub(githubToken: string) {
         console.log('🎯 FRONTEND: Calling verifyGitHub with token length:', githubToken?.length || 0);
-        return await callFunction('verifyGitHub', { githubToken });
+        return await callCallableFunction('verifyGitHub', { githubToken });
     },
 
     async connectGitHub(userId: string, repoUrl: string, githubToken?: string) {
         console.log('🎯 FRONTEND: Calling connectGitHub with:', { userId, repoUrl, tokenLength: githubToken?.length || 0 });
-        return await callFunction('connectGitHub', { userId, repoUrl, githubToken });
+        return await callCallableFunction('connectGitHub', { userId, repoUrl, githubToken });
     },
 
     async syncProjectWithGitHub(userId: string, projectId: string) {
         console.log('🎯 FRONTEND: Calling syncProjectWithGitHub with:', { userId, projectId });
-        return await callFunction('syncProjectWithGitHub', { userId, projectId });
+        return await callCallableFunction('syncProjectWithGitHub', { userId, projectId });
     },
 
     // NEW AGENT CALLABLE FUNCTIONS - All using onCall architecture with intense logging
