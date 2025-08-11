@@ -65,14 +65,16 @@ function App() {
 
                         // Try to fetch project using Firebase Functions
                         try {
+                            console.log('🔍 FRONTEND: About to call getProject for userId:', userData.id);
                             const projectResult = await firebaseFunctions.getProject(userData.id) as any;
+                            console.log('🔍 FRONTEND: getProject returned:', projectResult);
                             if (projectResult.success && projectResult.project) {
                                 setProject(projectResult.project);
                                 setProjectId(projectResult.project.id); // Use actual project ID from backend
                                 console.log('✅ Loaded project from backend:', projectResult.project.id);
                                 localStorage.setItem('hackathon_project', JSON.stringify(projectResult.project));
                             } else {
-                                console.log('⚠️ No project found in backend for user');
+                                console.log('⚠️ No project found in backend for user. Response:', projectResult);
                                 // If no project exists, we'll set the project ID when a project is created
                             }
                         } catch (projectError) {
@@ -115,10 +117,35 @@ function App() {
         checkExistingUser();
     }, []);
 
-    const handleRegistrationComplete = (newUser: User) => {
+    const handleRegistrationComplete = async (newUser: any) => {
         setUser(newUser);
-        // Don't set a hardcoded project ID here - wait for project to be created
-        console.log('👤 User created, waiting for project setup to set project ID');
+
+        // Check if the user already has project info from login
+        if (newUser.existingProject) {
+            console.log('📋 User logged in with existing project:', newUser.existingProject);
+            setProject(newUser.existingProject);
+            setProjectId(newUser.existingProject.id);
+            localStorage.setItem('hackathon_project', JSON.stringify(newUser.existingProject));
+            return;
+        }
+
+        // Otherwise, check for existing projects (for cases where login didn't fetch project)
+        try {
+            console.log('🔍 Checking for existing projects for user:', newUser.id);
+            const projectResult = await firebaseFunctions.getProject(newUser.id) as any;
+
+            if (projectResult.success && projectResult.project) {
+                console.log('📋 Found existing project:', projectResult.project);
+                setProject(projectResult.project);
+                setProjectId(projectResult.project.id);
+                localStorage.setItem('hackathon_project', JSON.stringify(projectResult.project));
+            } else {
+                console.log('👤 No existing project found, waiting for project setup');
+            }
+        } catch (error) {
+            console.error('❌ Error checking for existing projects:', error);
+            console.log('👤 Error loading projects, waiting for project setup');
+        }
     };
 
     const handleProjectSetup = async (projectData: ProjectData) => {

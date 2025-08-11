@@ -43,7 +43,7 @@ async function callCallableFunction(functionName: string, data: any = {}) {
         console.log(`🔧 [${timestamp}] Creating callable function for:`, functionName);
         const callableFunction = httpsCallable(functions, functionName);
         console.log(`🔧 [${timestamp}] Callable function created, calling with data:`, data);
-        
+
         const result = await callableFunction(data);
 
         const endTime = performance.now();
@@ -76,7 +76,14 @@ export const firebaseFunctions = {
     // Chat functions
     async getProject(userId: string) {
         console.log('🎯 FRONTEND: Calling getProject with userId:', userId);
-        return await callCallableFunction('getProject', { userId });
+        try {
+            const result = await callCallableFunction('getProject', { userId });
+            console.log('🎯 FRONTEND: getProject result:', result);
+            return result;
+        } catch (error) {
+            console.error('❌ FRONTEND: getProject error:', error);
+            throw error;
+        }
     },
 
     async getChatHistory(userId: string, projectId?: string, limit = 50, offset = 0) {

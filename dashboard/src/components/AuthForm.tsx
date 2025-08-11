@@ -66,7 +66,23 @@ export const AuthForm: React.FC<AuthFormProps> = ({ onAuthComplete }) => {
                 // Login existing user using Firebase Functions
                 const result = await firebaseFunctions.loginUser(formData.email, formData.password) as any;
                 localStorage.setItem('hackathon_user', JSON.stringify(result.user));
-                onAuthComplete(result.user);
+
+                // For login, check if user has existing project
+                console.log('🔍 LOGIN: Checking for existing project for user:', result.user.id);
+                try {
+                    const projectResult = await firebaseFunctions.getProject(result.user.id) as any;
+                    if (projectResult.success && projectResult.project) {
+                        console.log('✅ LOGIN: Found existing project:', projectResult.project.id);
+                        // Pass both user and project info
+                        onAuthComplete({ ...result.user, existingProject: projectResult.project });
+                    } else {
+                        console.log('ℹ️ LOGIN: No existing project found');
+                        onAuthComplete(result.user);
+                    }
+                } catch (projectError) {
+                    console.log('⚠️ LOGIN: Error checking project, proceeding without project:', projectError);
+                    onAuthComplete(result.user);
+                }
             } else {
                 // Register new user using Firebase Functions
                 const result = await firebaseFunctions.registerUser({
