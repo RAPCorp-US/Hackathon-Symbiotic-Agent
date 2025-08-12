@@ -1,6 +1,7 @@
 // functions/src/api/chatCallableFunctions.ts
 import { getFirestore } from 'firebase-admin/firestore';
 import * as functions from 'firebase-functions';
+import { AgentManager } from '../core/agentManager';
 
 // Callable function for getting communication metrics
 export const getCommunicationMetrics = functions.https.onCall(async (data, context) => {
@@ -559,6 +560,20 @@ export const updateProjectGitHub = functions.https.onCall(async (data, context) 
     }
 });
 
+// Global AgentManager instance to prevent multiple instances
+let globalAgentManager: AgentManager | null = null;
+
+async function getGlobalAgentManager(): Promise<AgentManager> {
+    if (!globalAgentManager) {
+        const db = getFirestore();
+        console.log('🚀 CHAT API: Creating new AgentManager instance');
+        globalAgentManager = new AgentManager(db);
+        await globalAgentManager.initialize();
+        console.log('✅ CHAT API: AgentManager initialized');
+    }
+    return globalAgentManager;
+}
+
 // Callable function for sending messages with full agent processing
 export const sendMessage = functions.https.onCall(async (data, context) => {
     console.log('sendMessage called with data:', data);
@@ -603,10 +618,8 @@ export const sendMessage = functions.https.onCall(async (data, context) => {
 
         console.log('🤖 Processing message through agent system...');
 
-        // Initialize the agent system if not already done
-        const { AgentManager } = await import('../core/agentManager');
-        const agentManager = new AgentManager(db);
-        await agentManager.initialize();
+        // Use the global agent system to prevent multiple instances
+        const agentManager = await getGlobalAgentManager();
 
         // Get the communication hub
         const communicationHub = agentManager.getAgent('communication_hub');

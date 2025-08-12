@@ -16,7 +16,9 @@ export declare class UserCommunicationHub {
     private initializeProcessors;
     private setupWebSocketServer;
     private handleSocketConnection;
-    handleIncomingMessage(userId: string, message: string, context: any): Promise<void>;
+    handleIncomingMessage(userId: string, message: string, context: any): Promise<{
+        aiResponse?: string;
+    }>;
     private startQueueProcessor;
     private processMessage;
     private getAvailableProcessor;
@@ -24,6 +26,8 @@ export declare class UserCommunicationHub {
     private generateRecommendations;
     private sendUserResponse;
     private generateUserResponse;
+    private getRecentCoordinationAnalysis;
+    private formatCoordinationAnalysisForUser;
     private calculateMessagePriority;
     private getUserName;
     private getUserCurrentTasks;
