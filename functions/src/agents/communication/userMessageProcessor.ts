@@ -67,9 +67,6 @@ export class UserMessageProcessor {
             // Single comprehensive analysis and classification
             const { analysis, classification } = await this.analyzeAndClassifyMessage(message);
 
-            // Report to O4-Mini
-            await this.reportToDecisionEngine(analysis, classification);
-
             // Store processed message
             await this.storeProcessedMessage(message, analysis, classification);
 
@@ -234,25 +231,6 @@ Guidelines:
                 }
             };
         }
-    }
-
-    private async reportToDecisionEngine(
-        analysis: MessageAnalysis,
-        classification: MessageClassification
-    ) {
-        await this.messageRouter.sendMessage({
-            type: 'USER_COMMUNICATION',
-            source: `user_message_processor_${this.agentId}`,
-            target: 'decision_engine',
-            payload: {
-                analysis,
-                classification,
-                timestamp: Date.now()
-            },
-            priority: this.mapUrgencyToPriority(classification.urgency),
-            timestamp: Date.now(),
-            correlationId: analysis.messageId
-        });
     }
 
     private mapUrgencyToPriority(urgency: string): number {

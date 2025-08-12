@@ -19,6 +19,7 @@ export class ProgressCoordinator {
         this.logger.info('Initializing ProgressCoordinator...');
 
         try {
+            this.logger.info('Getting API keys...');
             const apiKeys = getApiKeys();
             this.logger.info('Retrieved API keys for ProgressCoordinator:', {
                 hasClaude: !!apiKeys.claude,
@@ -30,18 +31,25 @@ export class ProgressCoordinator {
                 throw new Error('Claude API key not configured');
             }
 
+            this.logger.info('Creating Anthropic client...');
             this.anthropic = new Anthropic({
                 apiKey: apiKeys.claude,
             });
 
-            this.logger.info('Claude client created successfully');
+            this.logger.info('Claude client created successfully, checking client properties...');
+            this.logger.info('Anthropic client type:', typeof this.anthropic);
+            this.logger.info('Anthropic client keys:', Object.keys(this.anthropic));
+
+            this.logger.info('Starting initialization...');
         } catch (error) {
             this.logger.error('Failed to initialize Claude client:', error);
             throw error;
         }
 
         this.initialize();
-    } private async initialize() {
+    }
+
+    private async initialize() {
         this.logger.info('Initializing Progress Coordinator');
 
         // Load initial state
@@ -157,10 +165,19 @@ export class ProgressCoordinator {
 
         try {
             this.logger.info('Making Claude API call for coordination analysis');
+            this.logger.info('Pre-call validation - Anthropic client state:', {
+                anthropicExists: !!this.anthropic,
+                anthropicType: typeof this.anthropic,
+                anthropicKeys: this.anthropic ? Object.keys(this.anthropic) : 'undefined',
+                anthropicConstructor: this.anthropic ? this.anthropic.constructor.name : 'undefined'
+            });
 
             if (!this.anthropic) {
+                this.logger.error('Anthropic client not initialized - this.anthropic is undefined');
                 throw new Error('Anthropic client not initialized');
             }
+
+            this.logger.info('Anthropic client validation passed, making API call');
 
             const response = await (this.anthropic as any).messages.create({
                 model: 'claude-sonnet-4-20250514',

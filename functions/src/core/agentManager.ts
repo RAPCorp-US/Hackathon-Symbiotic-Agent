@@ -101,12 +101,18 @@ export class AgentManager {
         this.agents.set('repository_scanner_manager', scannerManager);
 
         // Layer 5: Progress Coordinator (initialize before Layer 4)
-        const progressCoordinator = new ProgressCoordinator(
-            this.db,
-            this.messageRouter,
-            this.logger
-        );
-        this.agents.set('progress_coordinator', progressCoordinator);
+        try {
+            const progressCoordinator = new ProgressCoordinator(
+                this.db,
+                this.messageRouter,
+                this.logger
+            );
+            this.agents.set('progress_coordinator', progressCoordinator);
+            this.logger.info('ProgressCoordinator initialized successfully');
+        } catch (error) {
+            this.logger.error('Failed to initialize ProgressCoordinator:', error);
+            throw error;
+        }
 
         // Layer 6: Decision Engine
         const decisionEngine = new DecisionEngine(
