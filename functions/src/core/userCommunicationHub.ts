@@ -323,21 +323,65 @@ export class UserCommunicationHub {
             return "Message received and being processed.";
         }
 
-        // For help requests, try to get recent coordination analysis
-        if (processed.intent === 'help' || processed.intent === 'question') {
-            try {
-                // Look for recent coordination analysis in the global state
-                const recentAnalysis = await this.getRecentCoordinationAnalysis();
-                if (recentAnalysis) {
-                    return this.formatCoordinationAnalysisForUser(recentAnalysis);
+        // SIMPLE SOLUTION: Just get the coordination analysis and return it directly!
+        try {
+            this.logger.info('Getting recent coordination analysis for user response...');
+
+            // Wait a moment for coordination analysis to complete
+            await new Promise(resolve => setTimeout(resolve, 3000));
+
+            const recentAnalysis = await this.getRecentCoordinationAnalysis();
+            if (recentAnalysis) {
+                this.logger.info('Found coordination analysis, returning formatted response');
+
+                // Format the rich analysis for the user
+                let response = "🚀 **AI Project Analysis**\n\n";
+
+                response += `📊 **Status**: ${recentAnalysis.status?.toUpperCase() || 'ANALYZING'}\n`;
+                response += `📈 **Progress**: ${recentAnalysis.overallProgress || 0}%\n\n`;
+
+                if (recentAnalysis.bottlenecks?.length > 0) {
+                    response += "⚠️ **Critical Bottlenecks**:\n";
+                    recentAnalysis.bottlenecks.forEach((item: string, i: number) => {
+                        response += `${i + 1}. ${item}\n`;
+                    });
+                    response += "\n";
                 }
-            } catch (error) {
-                this.logger.error('Failed to get recent coordination analysis:', error);
+
+                if (recentAnalysis.recommendations?.length > 0) {
+                    response += "💡 **Immediate Action Items**:\n";
+                    recentAnalysis.recommendations.forEach((item: string, i: number) => {
+                        response += `${i + 1}. ${item}\n`;
+                    });
+                    response += "\n";
+                }
+
+                if (recentAnalysis.collaborationOpportunities?.length > 0) {
+                    response += "🤝 **Collaboration Opportunities**:\n";
+                    recentAnalysis.collaborationOpportunities.forEach((item: string, i: number) => {
+                        response += `${i + 1}. ${item}\n`;
+                    });
+                    response += "\n";
+                }
+
+                if (recentAnalysis.criticalIssues?.length > 0) {
+                    response += "🚨 **Critical Issues**:\n";
+                    recentAnalysis.criticalIssues.forEach((item: string, i: number) => {
+                        response += `${i + 1}. ${item}\n`;
+                    });
+                }
+
+                return response;
+            } else {
+                this.logger.warn('No coordination analysis found, using fallback');
             }
+        } catch (error) {
+            this.logger.error('Failed to get coordination analysis:', error);
         }
 
+        // Fallback responses
         const responses: Record<string, string> = {
-            help: "I've analyzed your project status. Let me provide you with detailed insights and recommendations...",
+            help: "I'm analyzing your project status and will provide detailed insights shortly...",
             question: "Let me find that information for you...",
             feedback: "Thank you for your feedback. I've shared it with the team.",
             issue: "I've logged this issue and notified the relevant team members.",
@@ -350,17 +394,32 @@ export class UserCommunicationHub {
 
     private async getRecentCoordinationAnalysis(): Promise<any> {
         try {
+            this.logger.info('Attempting to get recent coordination analysis from global state...');
+
             // Get the current global state where coordination analysis is stored
             const globalStateDoc = await this.db.collection('global_state').doc('current').get();
 
+            this.logger.info('Global state document query result:', {
+                exists: globalStateDoc.exists,
+                hasData: globalStateDoc.exists && !!globalStateDoc.data()
+            });
+
             if (globalStateDoc.exists) {
                 const globalStateData = globalStateDoc.data();
+                this.logger.info('Global state data structure:', {
+                    hasGlobalStateData: !!globalStateData,
+                    keys: globalStateData ? Object.keys(globalStateData) : [],
+                    hasCoordination: !!(globalStateData && globalStateData.coordination),
+                    coordinationKeys: globalStateData?.coordination ? Object.keys(globalStateData.coordination) : []
+                });
+
                 if (globalStateData && globalStateData.coordination) {
                     this.logger.info('Found recent coordination analysis:', {
                         hasAnalysis: !!globalStateData.coordination,
                         status: globalStateData.coordination.status,
                         issuesCount: globalStateData.coordination.criticalIssues?.length || 0,
-                        recommendationsCount: globalStateData.coordination.recommendations?.length || 0
+                        recommendationsCount: globalStateData.coordination.recommendations?.length || 0,
+                        timestamp: globalStateData.coordination.timestamp
                     });
                     return globalStateData.coordination;
                 }
