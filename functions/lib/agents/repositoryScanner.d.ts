@@ -16,6 +16,7 @@ export declare class RepositoryScanner {
     private lastScanTime;
     constructor(id: string, db: Firestore, messageRouter: MessageRouter, logger: Logger);
     private getGitService;
+    private getProjectRepositoryInfo;
     private initialize;
     private startContinuousMonitoring;
     setMode(mode: string): Promise<void>;
