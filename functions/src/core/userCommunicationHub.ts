@@ -350,18 +350,23 @@ export class UserCommunicationHub {
 
     private async getRecentCoordinationAnalysis(): Promise<any> {
         try {
-            // Get the most recent coordination analysis from the progress coordinator's global state
-            const globalStateSnapshot = await this.db.collection('global_state')
-                .orderBy('timestamp', 'desc')
-                .limit(1)
-                .get();
+            // Get the current global state where coordination analysis is stored
+            const globalStateDoc = await this.db.collection('global_state').doc('current').get();
 
-            if (!globalStateSnapshot.empty && globalStateSnapshot.docs[0]) {
-                const globalStateData = globalStateSnapshot.docs[0].data();
+            if (globalStateDoc.exists) {
+                const globalStateData = globalStateDoc.data();
                 if (globalStateData && globalStateData.coordination) {
+                    this.logger.info('Found recent coordination analysis:', {
+                        hasAnalysis: !!globalStateData.coordination,
+                        status: globalStateData.coordination.status,
+                        issuesCount: globalStateData.coordination.criticalIssues?.length || 0,
+                        recommendationsCount: globalStateData.coordination.recommendations?.length || 0
+                    });
                     return globalStateData.coordination;
                 }
             }
+
+            this.logger.info('No coordination analysis found in global state');
         } catch (error) {
             this.logger.error('Error getting recent coordination analysis:', error);
         }

@@ -246,7 +246,11 @@ export class ProgressCoordinator {
         await this.communicateWithDecisionEngine(coordination);
 
         // Update global state
-        this.globalState.coordination = coordination;
+        this.globalState.coordination = {
+            ...coordination,
+            timestamp: Date.now(),
+            lastAnalysis: new Date().toISOString()
+        };
         await this.saveGlobalState();
     }
 
