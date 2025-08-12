@@ -1,5 +1,5 @@
 // functions/src/agents/editCoordinator.ts
-import Anthropic from '@anthropic-ai/sdk';
+import { Anthropic } from '@anthropic-ai/sdk';
 import { Firestore } from '@google-cloud/firestore';
 import { getApiKeys } from '../config/apiKeys';
 import { MessageRouter } from '../core/messageRouter';

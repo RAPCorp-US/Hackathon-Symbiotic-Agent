@@ -1,5 +1,5 @@
 // functions/src/agents/progressCoordinator.ts
-import Anthropic from '@anthropic-ai/sdk';
+import { Anthropic } from '@anthropic-ai/sdk';
 import { Firestore } from '@google-cloud/firestore';
 import { getApiKeys } from '../config/apiKeys';
 import { MessageRouter } from '../core/messageRouter';
@@ -35,24 +35,13 @@ export class ProgressCoordinator {
             });
 
             this.logger.info('Claude client created successfully');
-
-            // Test the client structure
-            const anthropicAny = this.anthropic as any;
-            if (!anthropicAny.messages) {
-                this.logger.error('Claude client missing messages API');
-                throw new Error('Claude client not properly initialized - missing messages API');
-            }
-
-            this.logger.info('Claude client validation passed');
         } catch (error) {
             this.logger.error('Failed to initialize Claude client:', error);
             throw error;
         }
 
         this.initialize();
-    }
-
-    private async initialize() {
+    } private async initialize() {
         this.logger.info('Initializing Progress Coordinator');
 
         // Load initial state
@@ -173,18 +162,7 @@ export class ProgressCoordinator {
                 throw new Error('Anthropic client not initialized');
             }
 
-            // Validate that the client has the expected structure
-            const anthropicAny = this.anthropic as any;
-            if (!anthropicAny.messages || typeof anthropicAny.messages.create !== 'function') {
-                this.logger.error('Anthropic client structure invalid:', {
-                    hasClient: !!this.anthropic,
-                    hasMessages: !!(anthropicAny && anthropicAny.messages),
-                    hasCreate: !!(anthropicAny && anthropicAny.messages && typeof anthropicAny.messages.create === 'function')
-                });
-                throw new Error('Anthropic client not properly structured');
-            }
-
-            const response = await anthropicAny.messages.create({
+            const response = await (this.anthropic as any).messages.create({
                 model: 'claude-sonnet-4-20250514',
                 max_tokens: 1500,
                 temperature: 0.3,
