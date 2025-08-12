@@ -70,7 +70,27 @@ export class EditCoordinator {
     - Impact assessment
     - Implementation priority
     
-    Return as JSON with detailed edit instructions.`;
+    Please wrap your JSON response in delimiters like this:
+    ---EDIT_JSON_START---
+    {
+      "suggestions": [
+        {
+          "type": "bug_fix|performance|quality|security|refactoring",
+          "file": "path/to/file",
+          "lineChanges": [
+            {
+              "line": number,
+              "oldCode": "existing code",
+              "newCode": "suggested code",
+              "explanation": "why this change is beneficial"
+            }
+          ],
+          "impactAssessment": "description",
+          "priority": "high|medium|low"
+        }
+      ]
+    }
+    ---EDIT_JSON_END---`;
 
         try {
             this.logger.info('Making Claude API call for edit planning');
@@ -82,17 +102,48 @@ export class EditCoordinator {
             const response = await (this.anthropic as any).messages.create({
                 model: 'claude-sonnet-4-20250514',
                 max_tokens: 2000,
-                temperature: 0.3,
                 messages: [{ role: 'user', content: prompt }]
             });
 
             const content = response.content[0];
             if (content?.type === 'text') {
                 try {
-                    return JSON.parse(content.text);
+                    // Extract JSON using delimited approach like userMessageProcessor
+                    this.logger.info('Attempting to extract delimited JSON from Claude response');
+                    const jsonMatch = content.text.match(/---EDIT_JSON_START---([\s\S]*?)---EDIT_JSON_END---/);
+
+                    if (!jsonMatch || !jsonMatch[1]) {
+                        this.logger.error('No delimited JSON found in Claude response', {
+                            hasStartDelimiter: content.text.includes('---EDIT_JSON_START---'),
+                            hasEndDelimiter: content.text.includes('---EDIT_JSON_END---'),
+                            fullContent: content.text
+                        });
+                        throw new Error('Claude response missing required JSON delimiters');
+                    }
+
+                    const jsonString = jsonMatch[1].trim();
+                    this.logger.info('Extracted JSON string from Claude response', {
+                        jsonLength: jsonString.length,
+                        jsonContent: jsonString
+                    });
+
+                    const result = JSON.parse(jsonString);
+                    this.logger.info('Successfully parsed JSON from Claude response');
+                    return result;
                 } catch (parseError) {
                     this.logger.error('Failed to parse Claude response as JSON', parseError);
-                    throw new Error('Invalid JSON response from Claude');
+                    this.logger.error('Raw Claude response content:', content.text);
+
+                    // Return fallback response like userMessageProcessor
+                    return {
+                        suggestions: [{
+                            type: 'fallback',
+                            file: 'unknown',
+                            lineChanges: [],
+                            impactAssessment: 'Failed to parse Claude response',
+                            priority: 'low'
+                        }]
+                    };
                 }
             } else {
                 throw new Error('Unexpected response format from Claude');

@@ -154,7 +154,8 @@ export class ProgressCoordinator {
     3. Recommended interventions
     4. Collaboration suggestions
     
-    Return as JSON with structure:
+    Please wrap your JSON response in delimiters like this:
+    ---COORDINATION_JSON_START---
     {
       "overallProgress": percentage,
       "status": "on_track|at_risk|critical",
@@ -162,7 +163,8 @@ export class ProgressCoordinator {
       "collaborationOpportunities": [],
       "criticalIssues": [],
       "recommendations": []
-    }`;
+    }
+    ---COORDINATION_JSON_END---`;
 
         let coordination;
 
@@ -206,9 +208,30 @@ export class ProgressCoordinator {
             const content = response.content[0];
             if (content?.type === 'text') {
                 try {
-                    coordination = JSON.parse(content.text);
+                    // Extract JSON using delimited approach like userMessageProcessor
+                    this.logger.info('Attempting to extract delimited JSON from Claude response');
+                    const jsonMatch = content.text.match(/---COORDINATION_JSON_START---([\s\S]*?)---COORDINATION_JSON_END---/);
+
+                    if (!jsonMatch || !jsonMatch[1]) {
+                        this.logger.error('No delimited JSON found in Claude response', {
+                            hasStartDelimiter: content.text.includes('---COORDINATION_JSON_START---'),
+                            hasEndDelimiter: content.text.includes('---COORDINATION_JSON_END---'),
+                            fullContent: content.text
+                        });
+                        throw new Error('Claude response missing required JSON delimiters');
+                    }
+
+                    const jsonString = jsonMatch[1].trim();
+                    this.logger.info('Extracted JSON string from Claude response', {
+                        jsonLength: jsonString.length,
+                        jsonContent: jsonString
+                    });
+
+                    coordination = JSON.parse(jsonString);
+                    this.logger.info('Successfully parsed JSON from Claude response');
                 } catch (parseError) {
                     this.logger.error('Failed to parse Claude response as JSON', parseError);
+                    this.logger.error('Raw Claude response content:', content.text);
                     throw new Error('Invalid JSON response from Claude');
                 }
             } else {
