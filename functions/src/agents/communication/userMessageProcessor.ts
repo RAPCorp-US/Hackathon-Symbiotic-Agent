@@ -25,8 +25,34 @@ export class UserMessageProcessor {
         private logger: Logger
     ) {
         this.agentId = agentId;
-        const apiKeys = getApiKeys();
-        this.openai = new OpenAI({ apiKey: apiKeys.openai });
+
+        this.logger.info(`[UserMessageProcessor] Initializing ${agentId}...`);
+
+        try {
+            const apiKeys = getApiKeys();
+            this.logger.info(`[UserMessageProcessor] API keys retrieved for ${agentId}:`, {
+                hasOpenAI: !!apiKeys.openai,
+                openaiLength: apiKeys.openai ? apiKeys.openai.length : 0
+            });
+
+            if (!apiKeys.openai) {
+                throw new Error(`OpenAI API key is missing for ${agentId}`);
+            }
+
+            this.openai = new OpenAI({ apiKey: apiKeys.openai });
+            this.logger.info(`[UserMessageProcessor] OpenAI client created successfully for ${agentId}`);
+
+            // Test that the client has the expected methods
+            if (!this.openai || !this.openai.chat || !this.openai.chat.completions) {
+                throw new Error(`OpenAI client not properly initialized for ${agentId}`);
+            }
+
+            this.logger.info(`[UserMessageProcessor] OpenAI client validation passed for ${agentId}`);
+        } catch (error) {
+            this.logger.error(`[UserMessageProcessor] Failed to initialize OpenAI client for ${agentId}:`, error);
+            throw error;
+        }
+
         this.initialize();
     }
 
@@ -49,10 +75,10 @@ export class UserMessageProcessor {
 
             return {
                 originalMessage: message,
-                intent: analysis.intent,
-                entities: analysis.entities,
-                urgency: classification.urgency,
-                suggestedAction: classification.action,
+                intent: analysis?.intent || 'help',
+                entities: analysis?.entities || { tasks: [], users: [], technical_terms: [], files: [] },
+                urgency: classification?.urgency || 'medium',
+                suggestedAction: classification?.action || 'provide_help',
                 agentId: this.agentId,
                 processedAt: Date.now()
             };
@@ -72,8 +98,8 @@ MESSAGE: "${message.content}"
 USER STATUS: ${message.context?.userStatus || 'active'}
 HACKATHON CONTEXT: ${message.context?.hackathonId || 'unknown'}
 
-Return a JSON response with BOTH analysis and classification:
-
+Please wrap your JSON response in delimiters like this:
+---ANALYSIS_JSON_START---
 {
   "analysis": {
     "intent": "question|request|feedback|issue|help|status_update|collaboration",
@@ -97,6 +123,7 @@ Return a JSON response with BOTH analysis and classification:
     "confidence": 0.0-1.0
   }
 }
+---ANALYSIS_JSON_END---
 
 Guidelines:
 - Extract ALL relevant entities comprehensively
@@ -105,24 +132,108 @@ Guidelines:
 - Route to appropriate agents based on content type
 - Provide actionable classification for coordination`;
 
+        this.logger.info(`[UserMessageProcessor] Making OpenAI API call for message: ${message.id}`);
+
+        // Defensive check to ensure OpenAI client is properly initialized
+        if (!this.openai || !this.openai.chat || !this.openai.chat.completions || typeof this.openai.chat.completions.create !== 'function') {
+            this.logger.error(`[UserMessageProcessor] OpenAI client not properly initialized`, {
+                hasOpenai: !!this.openai,
+                hasChat: !!(this.openai && this.openai.chat),
+                hasCompletions: !!(this.openai && this.openai.chat && this.openai.chat.completions),
+                hasCreateMethod: !!(this.openai && this.openai.chat && this.openai.chat.completions && typeof this.openai.chat.completions.create === 'function')
+            });
+            throw new Error('OpenAI client not properly initialized - cannot make API call');
+        }
+
         const response = await this.openai.chat.completions.create({
             model: 'gpt-4o-mini',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.2,
-            max_completion_tokens: 500,
-            response_format: { type: 'json_object' }
+            max_completion_tokens: 500
+        });
+
+        this.logger.info(`[UserMessageProcessor] OpenAI API response received:`, {
+            messageId: message.id,
+            choices: response.choices?.length || 0,
+            finishReason: response.choices[0]?.finish_reason,
+            usage: response.usage
         });
 
         const content = response.choices[0]?.message?.content;
         if (!content) {
+            this.logger.error(`[UserMessageProcessor] No response content received from OpenAI for message: ${message.id}`);
             throw new Error('No response content received from OpenAI for message analysis');
         }
 
-        const result = JSON.parse(content);
-        return {
-            analysis: result.analysis,
-            classification: result.classification
-        };
+        this.logger.info(`[UserMessageProcessor] Raw OpenAI response content for message ${message.id}:`, {
+            contentLength: content.length,
+            contentPreview: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
+            hasDelimiters: content.includes('---ANALYSIS_JSON_START---') && content.includes('---ANALYSIS_JSON_END---')
+        });
+
+        try {
+            // Extract JSON using delimited approach
+            this.logger.info(`[UserMessageProcessor] Attempting to extract delimited JSON for message: ${message.id}`);
+            const jsonMatch = content.match(/---ANALYSIS_JSON_START---([\s\S]*?)---ANALYSIS_JSON_END---/);
+
+            if (!jsonMatch || !jsonMatch[1]) {
+                this.logger.error(`[UserMessageProcessor] No delimited JSON found in response for message: ${message.id}`, {
+                    hasStartDelimiter: content.includes('---ANALYSIS_JSON_START---'),
+                    hasEndDelimiter: content.includes('---ANALYSIS_JSON_END---'),
+                    fullContent: content
+                });
+                throw new Error('AI response missing required JSON delimiters');
+            }
+
+            const jsonString = jsonMatch[1].trim();
+            this.logger.info(`[UserMessageProcessor] Extracted JSON string for message ${message.id}:`, {
+                jsonLength: jsonString.length,
+                jsonContent: jsonString
+            });
+
+            const result = JSON.parse(jsonString);
+            this.logger.info(`[UserMessageProcessor] Successfully parsed JSON for message ${message.id}:`, {
+                hasAnalysis: !!result.analysis,
+                hasClassification: !!result.classification,
+                analysisIntent: result.analysis?.intent,
+                classificationUrgency: result.classification?.urgency
+            });
+
+            return {
+                analysis: result.analysis,
+                classification: result.classification
+            };
+        } catch (parseError) {
+            const error = parseError instanceof Error ? parseError : new Error(String(parseError));
+            this.logger.error(`[UserMessageProcessor] Failed to parse JSON response for message ${message.id}:`, {
+                error: error.message,
+                rawContent: content,
+                stack: error.stack
+            });
+            console.error('Failed to parse JSON response:', content);
+            console.error('Parse error:', parseError);
+
+            // Return fallback response
+            this.logger.info(`[UserMessageProcessor] Returning fallback response for message: ${message.id}`);
+            return {
+                analysis: {
+                    intent: 'help',
+                    entities: { tasks: [], users: [], technical_terms: [], files: [] },
+                    emotional_tone: 'neutral',
+                    requires_action: true,
+                    action_type: 'immediate',
+                    expertise_needed: ['general'],
+                    messageId: 'fallback'
+                },
+                classification: {
+                    urgency: 'medium',
+                    category: 'help',
+                    route_to: ['decision_engine'],
+                    action: 'provide_help',
+                    confidence: 0.5
+                }
+            };
+        }
     }
 
     private async reportToDecisionEngine(

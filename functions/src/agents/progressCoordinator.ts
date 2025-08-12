@@ -17,6 +17,10 @@ export class ProgressCoordinator {
         private logger: Logger
     ) {
         const apiKeys = getApiKeys();
+        if (!apiKeys.claude) {
+            this.logger.error('Claude API key not found');
+            throw new Error('Claude API key not configured');
+        }
         this.anthropic = new Anthropic({
             apiKey: apiKeys.claude,
         });
@@ -135,19 +139,36 @@ export class ProgressCoordinator {
       "recommendations": []
     }`;
 
-        const response = await (this.anthropic as any).messages.create({
-            model: 'claude-sonnet-4-20250514',
-            max_tokens: 1500,
-            temperature: 0.3,
-            messages: [{ role: 'user', content: prompt }]
-        });
-
-        const content = response.content[0];
         let coordination;
-        if (content.type === 'text') {
-            coordination = JSON.parse(content.text);
-        } else {
-            throw new Error('Unexpected response content type from Claude');
+
+        try {
+            this.logger.info('Making Claude API call for coordination analysis');
+
+            if (!this.anthropic) {
+                throw new Error('Anthropic client not initialized');
+            }
+
+            const response = await (this.anthropic as any).messages.create({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 1500,
+                temperature: 0.3,
+                messages: [{ role: 'user', content: prompt }]
+            });
+
+            const content = response.content[0];
+            if (content?.type === 'text') {
+                try {
+                    coordination = JSON.parse(content.text);
+                } catch (parseError) {
+                    this.logger.error('Failed to parse Claude response as JSON', parseError);
+                    throw new Error('Invalid JSON response from Claude');
+                }
+            } else {
+                throw new Error('Unexpected response content type from Claude');
+            }
+        } catch (error) {
+            this.logger.error('Claude API call failed', error);
+            throw error;
         }
 
         // Communicate with O4-Mini
