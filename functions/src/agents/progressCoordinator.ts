@@ -46,7 +46,10 @@ export class ProgressCoordinator {
             throw error;
         }
 
-        this.initialize();
+        // Initialize asynchronously - this will be handled by the agent manager
+        this.initialize().catch(error => {
+            this.logger.error('Failed to initialize ProgressCoordinator:', error);
+        });
     }
 
     private async initialize() {
@@ -174,7 +177,22 @@ export class ProgressCoordinator {
 
             if (!this.anthropic) {
                 this.logger.error('Anthropic client not initialized - this.anthropic is undefined');
-                throw new Error('Anthropic client not initialized');
+                this.logger.error('Attempting to reinitialize Anthropic client...');
+
+                try {
+                    const apiKeys = getApiKeys();
+                    if (apiKeys.claude) {
+                        this.anthropic = new Anthropic({
+                            apiKey: apiKeys.claude,
+                        });
+                        this.logger.info('Successfully reinitialized Anthropic client');
+                    } else {
+                        throw new Error('Claude API key not available for reinitialization');
+                    }
+                } catch (reinitError) {
+                    this.logger.error('Failed to reinitialize Anthropic client:', reinitError);
+                    throw new Error('Anthropic client not initialized and reinitialization failed');
+                }
             }
 
             this.logger.info('Anthropic client validation passed, making API call');
@@ -182,7 +200,6 @@ export class ProgressCoordinator {
             const response = await (this.anthropic as any).messages.create({
                 model: 'claude-sonnet-4-20250514',
                 max_tokens: 1500,
-                temperature: 0.3,
                 messages: [{ role: 'user', content: prompt }]
             });
 

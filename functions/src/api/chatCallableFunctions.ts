@@ -528,6 +528,37 @@ export const createProject = functions.https.onCall(async (data, context) => {
     }
 });
 
+// Callable function for updating project with GitHub repository
+export const updateProjectGitHub = functions.https.onCall(async (data, context) => {
+    console.log('updateProjectGitHub called with data:', data);
+
+    const { projectId, githubRepo } = data;
+
+    if (!projectId) {
+        throw new functions.https.HttpsError('invalid-argument', 'Project ID is required');
+    }
+
+    try {
+        const db = getFirestore();
+
+        // Update project with GitHub repository information
+        await db.collection('projects').doc(projectId).update({
+            githubRepo: githubRepo || null,
+            updatedAt: Date.now()
+        });
+
+        console.log('Project updated with GitHub repo:', projectId);
+
+        return {
+            success: true,
+            message: 'Project updated with GitHub repository successfully'
+        };
+    } catch (error) {
+        console.error('Error updating project with GitHub repo:', error);
+        throw new functions.https.HttpsError('internal', 'Failed to update project with GitHub repository', error);
+    }
+});
+
 // Callable function for sending messages with full agent processing
 export const sendMessage = functions.https.onCall(async (data, context) => {
     console.log('sendMessage called with data:', data);

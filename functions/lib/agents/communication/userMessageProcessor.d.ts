@@ -14,7 +14,6 @@ export declare class UserMessageProcessor {
     private initialize;
     processUserMessage(message: UserMessage): Promise<ProcessedMessage>;
     private analyzeAndClassifyMessage;
-    private reportToDecisionEngine;
     private mapUrgencyToPriority;
     private storeProcessedMessage;
     isAvailable(): boolean;

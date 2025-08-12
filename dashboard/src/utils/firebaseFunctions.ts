@@ -91,7 +91,7 @@ export const firebaseFunctions = {
         return await callCallableFunction('getChatHistory', { userId, projectId, limit, offset });
     },
 
-    async createProject(userId: string, projectData: any, githubRepo?: string) {
+    async createProject(userId: string, projectData: any, githubRepo?: any) {
         console.log('🎯 FRONTEND: Calling createProject with:', { userId, projectData, githubRepo });
         return await callCallableFunction('createProject', { userId, projectData, githubRepo });
     },

@@ -39,6 +39,98 @@ export class RepositoryScanner {
         return this.gitService;
     }
 
+    private async getProjectRepositoryInfo(projectId?: string): Promise<{ repoUrl?: string, token?: string } | null> {
+        try {
+            let projectQuery;
+
+            if (projectId) {
+                // Get specific project by ID
+                this.logger.info(`Scanner ${this.id}: Looking for repository info for project: ${projectId}`);
+                const projectDoc = await this.db.collection('projects').doc(projectId).get();
+
+                if (projectDoc.exists) {
+                    const projectData = projectDoc.data();
+                    if (projectData?.githubRepo) {
+                        this.logger.info(`Scanner ${this.id}: Found repository info for project ${projectId}:`, projectData.githubRepo);
+                        return {
+                            repoUrl: `https://github.com/${projectData.githubRepo.owner}/${projectData.githubRepo.repo}`,
+                            token: projectData.githubRepo.token
+                        };
+                    } else {
+                        this.logger.info(`Scanner ${this.id}: Project ${projectId} has no GitHub repository configured, checking github_connections`);
+
+                        // Fallback: Check github_connections for the project's user
+                        if (projectData?.userId) {
+                            const githubConnectionDoc = await this.db.collection('github_connections').doc(projectData.userId).get();
+                            if (githubConnectionDoc.exists) {
+                                const connectionData = githubConnectionDoc.data();
+                                if (connectionData?.repoUrl) {
+                                    this.logger.info(`Scanner ${this.id}: Found repository info from github_connections for user ${projectData.userId}`);
+                                    return {
+                                        repoUrl: connectionData.repoUrl,
+                                        token: connectionData.githubToken
+                                    };
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    this.logger.warn(`Scanner ${this.id}: Project ${projectId} not found`);
+                }
+            } else {
+                // Fallback: Get the most recent project with repository information
+                this.logger.info(`Scanner ${this.id}: No projectId provided, looking for most recent project with repository info`);
+                const projectsSnapshot = await this.db.collection('projects')
+                    .where('githubRepo', '!=', null)
+                    .orderBy('githubRepo')
+                    .orderBy('createdAt', 'desc')
+                    .limit(1)
+                    .get();
+
+                if (!projectsSnapshot.empty && projectsSnapshot.docs.length > 0) {
+                    const projectDoc = projectsSnapshot.docs[0];
+                    if (projectDoc) {
+                        const projectData = projectDoc.data();
+                        if (projectData?.githubRepo) {
+                            this.logger.info(`Scanner ${this.id}: Found repository info from recent project:`, projectData.githubRepo);
+                            return {
+                                repoUrl: `https://github.com/${projectData.githubRepo.owner}/${projectData.githubRepo.repo}`,
+                                token: projectData.githubRepo.token
+                            };
+                        }
+                    }
+                } else {
+                    // Ultimate fallback: Check github_connections
+                    this.logger.info(`Scanner ${this.id}: No projects with githubRepo found, checking github_connections`);
+                    const connectionsSnapshot = await this.db.collection('github_connections')
+                        .orderBy('connectedAt', 'desc')
+                        .limit(1)
+                        .get();
+
+                    if (!connectionsSnapshot.empty && connectionsSnapshot.docs.length > 0) {
+                        const connectionDoc = connectionsSnapshot.docs[0];
+                        if (connectionDoc) {
+                            const connectionData = connectionDoc.data();
+                            if (connectionData?.repoUrl) {
+                                this.logger.info(`Scanner ${this.id}: Found repository info from github_connections`);
+                                return {
+                                    repoUrl: connectionData.repoUrl,
+                                    token: connectionData.githubToken
+                                };
+                            }
+                        }
+                    }
+                }
+            }
+
+            this.logger.info(`Scanner ${this.id}: No project with repository info found`);
+            return null;
+        } catch (error) {
+            this.logger.error(`Scanner ${this.id}: Failed to retrieve project repository info:`, error);
+            return null;
+        }
+    }
+
     private initialize() {
         this.logger.info(`Initializing Repository Scanner ${this.id}`);
 
@@ -251,10 +343,22 @@ export class RepositoryScanner {
     }
 
     private async performIncrementalScan() {
-        // Ensure gitService is available before scanning
+        // Check if we have repository information to initialize GitService
         if (!this.gitService) {
-            this.logger.warn(`Scanner ${this.id}: GitService not initialized, skipping incremental scan`);
-            return;
+            // Try to get repository info from the project context
+            try {
+                const projectInfo = await this.getProjectRepositoryInfo();
+                if (projectInfo?.repoUrl) {
+                    this.gitService = createGitService(projectInfo.repoUrl, projectInfo.token);
+                    this.logger.info(`Scanner ${this.id}: Initialized GitService with repo: ${projectInfo.repoUrl}`);
+                } else {
+                    this.logger.warn(`Scanner ${this.id}: No repository information available, skipping incremental scan`);
+                    return;
+                }
+            } catch (error) {
+                this.logger.warn(`Scanner ${this.id}: Failed to get repository info, skipping incremental scan:`, error);
+                return;
+            }
         }
 
         try {

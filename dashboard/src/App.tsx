@@ -151,8 +151,8 @@ function App() {
     const handleProjectSetup = async (projectData: ProjectData) => {
         if (user) {
             try {
-                // Save project to backend using Firebase Functions
-                const result = await firebaseFunctions.createProject(user.id, projectData) as any;
+                // Save project to backend using Firebase Functions, including GitHub repo if available
+                const result = await firebaseFunctions.createProject(user.id, projectData, githubRepo || undefined) as any;
                 if (result.success) {
                     setProjectId(result.projectId);
                 }
