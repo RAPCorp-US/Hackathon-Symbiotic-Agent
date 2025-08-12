@@ -135,14 +135,20 @@ export class ProgressCoordinator {
       "recommendations": []
     }`;
 
-        const response = await this.anthropic.completions.create({
+        const response = await (this.anthropic as any).messages.create({
             model: 'claude-sonnet-4-20250514',
-            max_tokens_to_sample: 1500,
+            max_tokens: 1500,
             temperature: 0.3,
-            prompt: `\n\nHuman: ${prompt}\n\nAssistant:`
+            messages: [{ role: 'user', content: prompt }]
         });
 
-        const coordination = JSON.parse(response.completion);
+        const content = response.content[0];
+        let coordination;
+        if (content.type === 'text') {
+            coordination = JSON.parse(content.text);
+        } else {
+            throw new Error('Unexpected response content type from Claude');
+        }
 
         // Communicate with O4-Mini
         await this.communicateWithDecisionEngine(coordination);

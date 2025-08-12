@@ -112,6 +112,13 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         // Send to backend for AI processing via Firebase Functions
         try {
             console.log('📤 CHAT: Sending message:', newMessage.trim());
+            console.log('📤 CHAT: ProjectId being sent:', {
+                projectId,
+                type: typeof projectId,
+                isEmpty: projectId === '',
+                isUndefined: projectId === undefined,
+                value: projectId
+            });
             const data = await firebaseFunctions.sendMessage(userId, newMessage.trim(), projectId) as any;
             console.log('✅ CHAT: Message sent successfully:', data);
 

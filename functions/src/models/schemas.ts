@@ -42,7 +42,7 @@ export const ConfigSchema = Joi.object({
         progressCoordinator: Joi.string().default('claude-4-sonnet'),
         decisionEngine: Joi.string().default('o4-mini'),
         codeExtractor: Joi.string().default('gpt-5-nano'),
-        editCoordinator: Joi.string().default('claude-3-sonnet')
+        editCoordinator: Joi.string().default('claude-4-sonnet')
     }).optional(),
     features: Joi.object({
         superAnalysis: Joi.boolean().default(false),

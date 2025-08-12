@@ -68,14 +68,19 @@ export class EditCoordinator {
     
     Return as JSON with detailed edit instructions.`;
 
-        const response = await this.anthropic.completions.create({
+        const response = await (this.anthropic as any).messages.create({
             model: 'claude-sonnet-4-20250514',
-            max_tokens_to_sample: 2000,
+            max_tokens: 2000,
             temperature: 0.3,
-            prompt: `\n\nHuman: ${prompt}\n\nAssistant:`
+            messages: [{ role: 'user', content: prompt }]
         });
 
-        return JSON.parse(response.completion);
+        const content = response.content[0];
+        if (content.type === 'text') {
+            return JSON.parse(content.text);
+        } else {
+            throw new Error('Unexpected response content type from Claude');
+        }
     }
 
     private async createRecommendations(suggestions: any, extraction: any) {

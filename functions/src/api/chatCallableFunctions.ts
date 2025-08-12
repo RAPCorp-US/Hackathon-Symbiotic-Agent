@@ -524,14 +524,14 @@ export const createProject = functions.https.onCall(async (data, context) => {
 export const sendMessage = functions.https.onCall(async (data, context) => {
     console.log('sendMessage called with data:', data);
 
-    const { userId, message, projectContext } = data;
+    const { userId, message, messageContext } = data;
 
-    console.log('🔍 BACKEND: projectContext received:', {
-        projectContext,
-        type: typeof projectContext,
-        isUndefined: projectContext === undefined,
-        isNull: projectContext === null,
-        value: projectContext
+    console.log('🔍 BACKEND: messageContext received:', {
+        messageContext,
+        type: typeof messageContext,
+        isUndefined: messageContext === undefined,
+        isNull: messageContext === null,
+        value: messageContext
     });
 
     if (!userId || !message) {
@@ -582,7 +582,7 @@ export const sendMessage = functions.https.onCall(async (data, context) => {
             userId,
             message,
             {
-                projectId: projectContext,
+                projectId: messageContext || null, // Convert empty string/undefined to null
                 messageId: messageId,
                 timestamp: Date.now()
             }
@@ -610,7 +610,7 @@ export const sendMessage = functions.https.onCall(async (data, context) => {
             await db.collection('processed_messages').doc(messageId).set({
                 userId,
                 message,
-                projectContext: projectContext || {},
+                projectContext: messageContext || {},
                 timestamp: Date.now(),
                 status: 'received',
                 error: 'Agent processing failed, fallback mode',
