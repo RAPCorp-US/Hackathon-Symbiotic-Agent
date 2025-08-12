@@ -62,7 +62,7 @@ export class IntentExtractor {
             model: 'gpt-5-mini',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.3,
-            max_tokens: 400,
+            max_completion_tokens: 400,
             response_format: { type: 'json_object' }
         });
 
@@ -96,7 +96,7 @@ export class IntentExtractor {
             model: 'gpt-5-mini',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.2,
-            max_tokens: 300
+            max_completion_tokens: 300
         });
 
         const content = response.choices[0]?.message?.content;

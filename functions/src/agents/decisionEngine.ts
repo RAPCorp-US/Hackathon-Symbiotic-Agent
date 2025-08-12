@@ -145,7 +145,7 @@ export class DecisionEngine {
             model: 'o4-mini',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.3,
-            max_tokens: 1000,
+            max_completion_tokens: 1000,
             response_format: { type: 'json_object' }
         });
 
@@ -350,7 +350,7 @@ export class DecisionEngine {
             model: 'o4-mini',
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.4,
-            max_tokens: 500
+            max_completion_tokens: 500
         });
 
         const content = response.choices[0]?.message?.content;
