@@ -125,7 +125,20 @@ export class UserCommunicationHub {
         message: UserMessage
     ) {
         try {
+            this.logger.info('[UserCommunicationHub] About to call processUserMessage for message:', message.id);
             const processed = await processor.processUserMessage(message);
+
+            this.logger.info('[UserCommunicationHub] processUserMessage returned:', {
+                processedExists: !!processed,
+                processedType: typeof processed,
+                intentExists: !!processed?.intent,
+                intent: processed?.intent,
+                urgency: processed?.urgency,
+                agentId: processed?.agentId,
+                processedAt: processed?.processedAt,
+                originalMessageId: processed?.originalMessage?.id
+            });
+
             await this.handleProcessedMessage(processed);
         } catch (error) {
             this.logger.error('Error processing message:', error);
@@ -148,11 +161,28 @@ export class UserCommunicationHub {
     }
 
     private async handleProcessedMessage(processed: ProcessedMessage) {
+        this.logger.info('[UserCommunicationHub] handleProcessedMessage called with:', {
+            processedExists: !!processed,
+            processedType: typeof processed,
+            intentExists: !!processed?.intent,
+            intent: processed?.intent,
+            urgency: processed?.urgency,
+            agentId: processed?.agentId,
+            processedAt: processed?.processedAt,
+            originalMessageId: processed?.originalMessage?.id
+        });
+
         // Safety check for processed message
         if (!processed || !processed.intent) {
-            this.logger.error('Invalid processed message received:', processed);
+            this.logger.error('Invalid processed message received:', {
+                processed: processed ? JSON.stringify(processed, null, 2) : 'null/undefined',
+                intentMissing: !processed?.intent,
+                processedMissing: !processed
+            });
             return;
         }
+
+        this.logger.info('[UserCommunicationHub] About to call generateRecommendations with valid processed message');
 
         // Generate recommendations
         const recommendations = await this.generateRecommendations(processed);
@@ -176,6 +206,31 @@ export class UserCommunicationHub {
     }
 
     private async generateRecommendations(processed: ProcessedMessage): Promise<any> {
+        // Enhanced debugging for undefined intent issue
+        this.logger.info('[UserCommunicationHub] generateRecommendations called with:', {
+            processedExists: !!processed,
+            processedType: typeof processed,
+            processedKeys: processed ? Object.keys(processed) : 'N/A',
+            intent: processed?.intent,
+            intentType: typeof processed?.intent,
+            urgency: processed?.urgency,
+            urgencyType: typeof processed?.urgency,
+            agentId: processed?.agentId,
+            processedAt: processed?.processedAt
+        });
+
+        if (!processed) {
+            this.logger.error('[UserCommunicationHub] ProcessedMessage is null or undefined');
+            return [];
+        }
+
+        if (!processed.intent) {
+            this.logger.error('[UserCommunicationHub] ProcessedMessage.intent is undefined:', {
+                processed: JSON.stringify(processed, null, 2)
+            });
+            return [];
+        }
+
         const recommendations = [];
 
         if (processed.intent === 'help') {
