@@ -148,6 +148,12 @@ export class UserCommunicationHub {
     }
 
     private async handleProcessedMessage(processed: ProcessedMessage) {
+        // Safety check for processed message
+        if (!processed || !processed.intent) {
+            this.logger.error('Invalid processed message received:', processed);
+            return;
+        }
+
         // Generate recommendations
         const recommendations = await this.generateRecommendations(processed);
 
