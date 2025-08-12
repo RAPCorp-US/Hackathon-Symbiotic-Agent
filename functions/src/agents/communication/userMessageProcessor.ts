@@ -298,7 +298,9 @@ Guidelines:
             analysis,
             classification,
             processedBy: this.agentId,
-            processedAt: Timestamp.now()
+            processedAt: Timestamp.now(),
+            // Add top-level projectContext for backward compatibility with chat history queries
+            projectContext: cleanMessage.context?.projectId || null
         });
     }
 

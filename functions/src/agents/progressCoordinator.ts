@@ -16,14 +16,39 @@ export class ProgressCoordinator {
         private messageRouter: MessageRouter,
         private logger: Logger
     ) {
-        const apiKeys = getApiKeys();
-        if (!apiKeys.claude) {
-            this.logger.error('Claude API key not found');
-            throw new Error('Claude API key not configured');
+        this.logger.info('Initializing ProgressCoordinator...');
+
+        try {
+            const apiKeys = getApiKeys();
+            this.logger.info('Retrieved API keys for ProgressCoordinator:', {
+                hasClaude: !!apiKeys.claude,
+                claudeLength: apiKeys.claude ? apiKeys.claude.length : 0
+            });
+
+            if (!apiKeys.claude) {
+                this.logger.error('Claude API key not found');
+                throw new Error('Claude API key not configured');
+            }
+
+            this.anthropic = new Anthropic({
+                apiKey: apiKeys.claude,
+            });
+
+            this.logger.info('Claude client created successfully');
+
+            // Test the client structure
+            const anthropicAny = this.anthropic as any;
+            if (!anthropicAny.messages) {
+                this.logger.error('Claude client missing messages API');
+                throw new Error('Claude client not properly initialized - missing messages API');
+            }
+
+            this.logger.info('Claude client validation passed');
+        } catch (error) {
+            this.logger.error('Failed to initialize Claude client:', error);
+            throw error;
         }
-        this.anthropic = new Anthropic({
-            apiKey: apiKeys.claude,
-        });
+
         this.initialize();
     }
 
@@ -148,7 +173,18 @@ export class ProgressCoordinator {
                 throw new Error('Anthropic client not initialized');
             }
 
-            const response = await (this.anthropic as any).messages.create({
+            // Validate that the client has the expected structure
+            const anthropicAny = this.anthropic as any;
+            if (!anthropicAny.messages || typeof anthropicAny.messages.create !== 'function') {
+                this.logger.error('Anthropic client structure invalid:', {
+                    hasClient: !!this.anthropic,
+                    hasMessages: !!(anthropicAny && anthropicAny.messages),
+                    hasCreate: !!(anthropicAny && anthropicAny.messages && typeof anthropicAny.messages.create === 'function')
+                });
+                throw new Error('Anthropic client not properly structured');
+            }
+
+            const response = await anthropicAny.messages.create({
                 model: 'claude-sonnet-4-20250514',
                 max_tokens: 1500,
                 temperature: 0.3,

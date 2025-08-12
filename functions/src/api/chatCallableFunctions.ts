@@ -401,32 +401,40 @@ export const getChatHistory = functions.https.onCall(async (data, context) => {
             console.log(`🔍 CHAT HISTORY: Looking for projectId: "${projectId}"`);
 
             filteredHistory = filteredHistory.filter((msg: any) => {
-                // Handle different projectContext formats (same logic as getCommunicationMetrics)
-                if (!msg.projectContext) {
-                    console.log(`  ❌ Message ${msg.id}: No projectContext`);
-                    return false; // No project context, don't include
-                }
-
+                // Handle backward compatibility: check multiple possible locations for projectId
                 let matches = false;
-                if (typeof msg.projectContext === 'string') {
-                    matches = msg.projectContext === projectId;
-                    console.log(`  🔍 Message ${msg.id}: String projectContext "${msg.projectContext}" ${matches ? '✅' : '❌'}`);
-                } else if (typeof msg.projectContext === 'object' && msg.projectContext !== null) {
-                    // Check if it's an empty object (like our previous issue)
-                    const keys = Object.keys(msg.projectContext);
-                    if (keys.length === 0) {
-                        // Empty object - return true to include all messages when filtering by specific projectId
-                        matches = true;
-                        console.log(`  🔍 Message ${msg.id}: Empty projectContext object - including ✅`);
-                    } else {
-                        matches = msg.projectContext.projectId === projectId ||
-                            msg.projectContext.id === projectId;
-                        console.log(`  🔍 Message ${msg.id}: Object projectContext with keys [${keys.join(', ')}] ${matches ? '✅' : '❌'}`);
+                let matchSource = '';
+
+                // Method 1: Check top-level projectContext (new format)
+                if (msg.projectContext) {
+                    if (typeof msg.projectContext === 'string') {
+                        matches = msg.projectContext === projectId;
+                        matchSource = 'projectContext string';
+                    } else if (typeof msg.projectContext === 'object' && msg.projectContext !== null) {
+                        const keys = Object.keys(msg.projectContext);
+                        if (keys.length === 0) {
+                            matches = true; // Empty object - include all
+                            matchSource = 'projectContext empty object';
+                        } else {
+                            matches = msg.projectContext.projectId === projectId || msg.projectContext.id === projectId;
+                            matchSource = 'projectContext object';
+                        }
                     }
-                } else {
-                    console.log(`  ❌ Message ${msg.id}: Unknown projectContext type: ${typeof msg.projectContext}`);
                 }
 
+                // Method 2: Check context.projectId (current format)
+                if (!matches && msg.context && msg.context.projectId) {
+                    matches = msg.context.projectId === projectId;
+                    matchSource = 'context.projectId';
+                }
+
+                // Method 3: Backward compatibility - if no project context at all, include it
+                if (!matches && !msg.projectContext && (!msg.context || !msg.context.projectId)) {
+                    matches = true; // Old messages without project context
+                    matchSource = 'legacy message';
+                }
+
+                console.log(`  ${matches ? '✅' : '❌'} Message ${msg.id}: ${matchSource} ${matches ? 'MATCH' : 'NO MATCH'}`);
                 return matches;
             });
             console.log(`🔍 CHAT HISTORY: Filtered from ${beforeFilter} to ${filteredHistory.length} messages for project ${projectId}`);
