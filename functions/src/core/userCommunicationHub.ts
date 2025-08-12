@@ -83,7 +83,7 @@ export class UserCommunicationHub {
         userId: string,
         message: string,
         context: any
-    ): Promise<void> {
+    ): Promise<{ aiResponse?: string }> {
         const userMessage: UserMessage = {
             id: this.generateId(),
             userId,
@@ -100,12 +100,30 @@ export class UserCommunicationHub {
             status: 'pending'
         };
 
-        // Add to priority queue
-        const priority = this.calculateMessagePriority(userMessage);
-        this.messageQueue.enqueue(userMessage, priority);
+        // Process the message immediately for real-time response
+        try {
+            const processor = this.getAvailableProcessor();
+            const processed = await processor.processUserMessage(userMessage);
 
-        // Send acknowledgment
-        this.sendAcknowledgment(userId, userMessage.id);
+            // Handle the processed message and generate response
+            await this.handleProcessedMessage(processed);
+
+            // Generate user response
+            const aiResponse = await this.generateUserResponse(processed);
+
+            return { aiResponse };
+        } catch (error) {
+            this.logger.error('Error processing message immediately:', error);
+
+            // Fall back to queue-based processing
+            const priority = this.calculateMessagePriority(userMessage);
+            this.messageQueue.enqueue(userMessage, priority);
+
+            // Send acknowledgment
+            this.sendAcknowledgment(userId, userMessage.id);
+
+            return { aiResponse: "I'm processing your message and will respond shortly." };
+        }
     }
 
     private async startQueueProcessor() {
@@ -305,8 +323,21 @@ export class UserCommunicationHub {
             return "Message received and being processed.";
         }
 
+        // For help requests, try to get recent coordination analysis
+        if (processed.intent === 'help' || processed.intent === 'question') {
+            try {
+                // Look for recent coordination analysis in the global state
+                const recentAnalysis = await this.getRecentCoordinationAnalysis();
+                if (recentAnalysis) {
+                    return this.formatCoordinationAnalysisForUser(recentAnalysis);
+                }
+            } catch (error) {
+                this.logger.error('Failed to get recent coordination analysis:', error);
+            }
+        }
+
         const responses: Record<string, string> = {
-            help: "I've identified team members who can help with your issue. Connecting you now...",
+            help: "I've analyzed your project status. Let me provide you with detailed insights and recommendations...",
             question: "Let me find that information for you...",
             feedback: "Thank you for your feedback. I've shared it with the team.",
             issue: "I've logged this issue and notified the relevant team members.",
@@ -315,6 +346,73 @@ export class UserCommunicationHub {
         };
 
         return responses[processed.intent] || "Message received and being processed.";
+    }
+
+    private async getRecentCoordinationAnalysis(): Promise<any> {
+        try {
+            // Get the most recent coordination analysis from the progress coordinator's global state
+            const globalStateSnapshot = await this.db.collection('global_state')
+                .orderBy('timestamp', 'desc')
+                .limit(1)
+                .get();
+
+            if (!globalStateSnapshot.empty && globalStateSnapshot.docs[0]) {
+                const globalStateData = globalStateSnapshot.docs[0].data();
+                if (globalStateData && globalStateData.coordination) {
+                    return globalStateData.coordination;
+                }
+            }
+        } catch (error) {
+            this.logger.error('Error getting recent coordination analysis:', error);
+        }
+        return null;
+    }
+
+    private formatCoordinationAnalysisForUser(analysis: any): string {
+        if (!analysis) return "I'm analyzing your project status...";
+
+        let response = "📊 **Project Analysis & Recommendations**\n\n";
+
+        // Overall status
+        response += `🔍 **Status**: ${analysis.status?.toUpperCase() || 'UNKNOWN'}\n`;
+        response += `📈 **Progress**: ${analysis.overallProgress || 0}%\n\n`;
+
+        // Critical issues
+        if (analysis.criticalIssues && analysis.criticalIssues.length > 0) {
+            response += "🚨 **Critical Issues**:\n";
+            analysis.criticalIssues.slice(0, 3).forEach((issue: string, index: number) => {
+                response += `${index + 1}. ${issue}\n`;
+            });
+            response += "\n";
+        }
+
+        // Bottlenecks
+        if (analysis.bottlenecks && analysis.bottlenecks.length > 0) {
+            response += "⚠️ **Key Bottlenecks**:\n";
+            analysis.bottlenecks.slice(0, 3).forEach((bottleneck: string, index: number) => {
+                response += `${index + 1}. ${bottleneck}\n`;
+            });
+            response += "\n";
+        }
+
+        // Recommendations
+        if (analysis.recommendations && analysis.recommendations.length > 0) {
+            response += "💡 **Action Recommendations**:\n";
+            analysis.recommendations.slice(0, 5).forEach((rec: string, index: number) => {
+                response += `${index + 1}. ${rec}\n`;
+            });
+            response += "\n";
+        }
+
+        // Collaboration opportunities
+        if (analysis.collaborationOpportunities && analysis.collaborationOpportunities.length > 0) {
+            response += "🤝 **Collaboration Opportunities**:\n";
+            analysis.collaborationOpportunities.slice(0, 3).forEach((opp: string, index: number) => {
+                response += `${index + 1}. ${opp}\n`;
+            });
+        }
+
+        return response || "I'm analyzing your project and will provide insights shortly.";
     }
 
     private calculateMessagePriority(message: UserMessage): number {
