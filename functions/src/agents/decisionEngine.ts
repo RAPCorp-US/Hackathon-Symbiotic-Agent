@@ -57,7 +57,31 @@ export class DecisionEngine {
     }
 
     private async handleUserCommunication(message: AgentMessage) {
+        console.log('DecisionEngine handleUserCommunication called with message:', {
+            hasPayload: !!message.payload,
+            payloadKeys: message.payload ? Object.keys(message.payload) : 'undefined'
+        });
+
         const { processedMessage, recommendedActions, affectedUsers } = message.payload;
+
+        console.log('DecisionEngine extracted processedMessage:', {
+            hasProcessedMessage: !!processedMessage,
+            processedMessageKeys: processedMessage ? Object.keys(processedMessage) : 'undefined',
+            intent: processedMessage?.intent
+        });
+
+        if (!processedMessage) {
+            console.error('DecisionEngine: processedMessage is undefined');
+            return;
+        }
+
+        if (!processedMessage.intent) {
+            console.error('DecisionEngine: processedMessage.intent is undefined', {
+                processedMessage,
+                keys: Object.keys(processedMessage)
+            });
+            return;
+        }
 
         // Get current system state
         const currentState = await this.getCurrentSystemState();

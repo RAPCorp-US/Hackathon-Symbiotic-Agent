@@ -260,6 +260,21 @@ export class UserCommunicationHub {
     }
 
     private async sendUserResponse(processed: ProcessedMessage) {
+        console.log('sendUserResponse called with processed:', {
+            keys: processed ? Object.keys(processed) : 'undefined',
+            userId: processed?.originalMessage?.userId
+        });
+
+        if (!processed) {
+            console.error('sendUserResponse: processed is undefined');
+            return;
+        }
+
+        if (!processed.originalMessage?.userId) {
+            console.error('sendUserResponse: no userId in processed.originalMessage', processed);
+            return;
+        }
+
         const socket = this.activeConnections.get(processed.originalMessage.userId);
         if (socket) {
             socket.emit('response', {
@@ -271,6 +286,25 @@ export class UserCommunicationHub {
     }
 
     private async generateUserResponse(processed: ProcessedMessage): Promise<string> {
+        console.log('generateUserResponse called with processed:', {
+            keys: processed ? Object.keys(processed) : 'undefined',
+            intent: processed?.intent,
+            hasIntent: processed && 'intent' in processed
+        });
+
+        if (!processed) {
+            console.error('generateUserResponse: processed is undefined');
+            return "Message received and being processed.";
+        }
+
+        if (!processed.intent) {
+            console.error('generateUserResponse: processed.intent is undefined', {
+                processed,
+                keys: Object.keys(processed)
+            });
+            return "Message received and being processed.";
+        }
+
         const responses: Record<string, string> = {
             help: "I've identified team members who can help with your issue. Connecting you now...",
             question: "Let me find that information for you...",
